@@ -1,0 +1,9 @@
+#!/bin/sh
+
+set -eu
+
+ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+
+printf 'pre-push: running feat-manager tests\n'
+cd "$ROOT_DIR"
+make test

@@ -547,3 +547,28 @@ The user asked to push phase 7 and then move to phase 8.
 Resulting direction:
 
 Phase 7 has been committed and pushed, and phase 8 now begins with a repeatable local smoke flow for the eval endpoint.
+
+## Entry
+
+### 2026-07-05
+
+Prompt summary:
+
+The user asked to start phase 8 with a local pre-push hook that blocks on failing tests.
+
+Decision points:
+
+- Whether the hook should run a single targeted package test or the full repo test suite.
+- How to make the hook reproducible in the repo while still installing it into the local checkout.
+
+AI recommendation:
+
+The recommendation was to add a tracked `.githooks/pre-push` script that runs `make test`, plus a `make hooks-install` target that sets `core.hooksPath` to `.githooks`. I also documented the hook install step in the backend README so the local checkout can be bootstrapped consistently.
+
+User response:
+
+The user asked to begin phase 8 with a local pre-push hook that blocks on failing tests.
+
+Resulting direction:
+
+Phase 8 now includes a repo-tracked pre-push hook and a local install target, both centered on the existing `make test` command.

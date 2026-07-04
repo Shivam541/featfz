@@ -11,9 +11,11 @@ Go backend for the feature flag monorepo.
 5. `make test`
 6. `make run`
 7. `make smoke-eval`
+8. `make hooks-install`
 
 `make test`, `make run`, and `make build` use a repo-local Go build cache under `.cache/go-build`.
 `make smoke-eval` expects the API to be running locally on `127.0.0.1:8080`.
+`make hooks-install` sets `core.hooksPath` to `.githooks` so the local pre-push hook blocks pushes when tests fail.
 
 ## Phase 2 auth slice
 
@@ -247,11 +249,17 @@ Phase 8 starts with a local smoke workflow for the eval path.
 
 - Command:
   - `make smoke-eval`
+- Hook:
+  - `make hooks-install`
 - What it does:
   - generates JWTs for `app-acme` and `app-globex`,
   - creates the same smoke flag in both tenants,
   - applies a user override in `acme`,
   - prints the live eval results for both tenants.
+- What the hook does:
+  - runs `make test` before every push,
+  - exits non-zero if tests fail,
+  - blocks the push when the test suite is red.
 - Requirements:
   - backend running on `127.0.0.1:8080`,
   - MySQL running with the seeded tenants.

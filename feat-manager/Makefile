@@ -1,7 +1,7 @@
 SHELL := /bin/sh
 GOCACHE ?= $(CURDIR)/.cache/go-build
 
-.PHONY: setup deps-up deps-down test run build migrate-up migrate-down fmt seed-phase2 smoke-eval cache-dir
+.PHONY: setup deps-up deps-down test run build migrate-up migrate-down fmt seed-phase2 smoke-eval hooks-install cache-dir
 
 cache-dir:
 	mkdir -p "$(GOCACHE)"
@@ -40,3 +40,7 @@ seed-phase2:
 
 smoke-eval:
 	bash ./scripts/smoke_eval.sh
+
+hooks-install:
+	git config core.hooksPath .githooks
+	@echo "git hooks installed from .githooks"
