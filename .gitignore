@@ -29,6 +29,7 @@ go.work.sum
 
 # local build outputs
 bin/
+.cache/
 
 # Editor/IDE
 # .idea/

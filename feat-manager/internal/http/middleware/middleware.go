@@ -3,6 +3,7 @@ package middleware
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/shivam/featfz/feat-manager/internal/http/requestctx"
 	"github.com/shivam/featfz/feat-manager/internal/http/response"
+	"github.com/shivam/featfz/feat-manager/internal/service"
 )
 
 const RequestIDHeader = "X-Request-ID"
@@ -76,6 +78,36 @@ func RequestLogging(logger *slog.Logger) Middleware {
 				slog.Int("status", recorder.status),
 				slog.Duration("duration", time.Since(startedAt)),
 			)
+		})
+	}
+}
+
+func RequireAuth(authenticator service.Authenticator) Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tenant, err := authenticator.Authenticate(
+				r.Context(),
+				r.Header.Get("X-App-ID"),
+				r.Header.Get("Authorization"),
+			)
+			if err != nil {
+				var authErr *service.AuthError
+				if errors.As(err, &authErr) {
+					response.WriteError(w, http.StatusUnauthorized, authErr.Code, authErr.Message, nil)
+					return
+				}
+
+				response.WriteError(w, http.StatusInternalServerError, "internal_error", "internal server error", nil)
+				return
+			}
+
+			ctx := requestctx.WithTenant(r.Context(), requestctx.Tenant{
+				TenantID: tenant.TenantID,
+				AppID:    tenant.AppID,
+				Subject:  tenant.Subject,
+			})
+
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }

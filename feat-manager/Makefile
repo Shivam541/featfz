@@ -1,6 +1,10 @@
 SHELL := /bin/sh
+GOCACHE ?= $(CURDIR)/.cache/go-build
 
-.PHONY: setup deps-up deps-down test run build migrate-up migrate-down fmt
+.PHONY: setup deps-up deps-down test run build migrate-up migrate-down fmt seed-phase2 cache-dir
+
+cache-dir:
+	mkdir -p "$(GOCACHE)"
 
 setup:
 	@if [ ! -f .env ]; then cp .env.example .env; fi
@@ -12,15 +16,15 @@ deps-up:
 deps-down:
 	docker compose down
 
-test:
-	go test ./...
+test: cache-dir
+	GOCACHE="$(GOCACHE)" go test ./...
 
-run:
-	set -a && . ./.env && set +a && go run ./cmd/api
+run: cache-dir
+	set -a && . ./.env && set +a && GOCACHE="$(GOCACHE)" go run ./cmd/api
 
-build:
+build: cache-dir
 	mkdir -p ./bin
-	go build -o ./bin/feat-manager ./cmd/api
+	GOCACHE="$(GOCACHE)" go build -o ./bin/feat-manager ./cmd/api
 
 migrate-up:
 	docker compose --profile tools run --rm migrate up
@@ -30,3 +34,6 @@ migrate-down:
 
 fmt:
 	gofmt -w ./cmd ./internal
+
+seed-phase2:
+	docker compose exec -T mysql mysql -ufeat_manager -pfeat_manager feat_manager < db/seeds/phase2_tenants.sql

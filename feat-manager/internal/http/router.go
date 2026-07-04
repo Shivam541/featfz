@@ -13,6 +13,7 @@ import (
 type RouterDependencies struct {
 	Logger        *slog.Logger
 	HealthChecker service.HealthChecker
+	Authenticator service.Authenticator
 }
 
 func NewRouter(deps RouterDependencies) http.Handler {
@@ -28,6 +29,7 @@ func NewRouter(deps RouterDependencies) http.Handler {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /healthz", handlers.NewHealth(healthChecker))
+	mux.Handle("GET /v1/auth/check", middleware.RequireAuth(deps.Authenticator)(handlers.NewAuthCheck()))
 
 	return middleware.Chain(mux,
 		middleware.Recover(logger),

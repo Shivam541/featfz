@@ -237,3 +237,54 @@ The user asked to start with phase 1 after reviewing the current repo documents 
 Resulting direction:
 
 Phase 1 was implemented in `feat-manager` by wiring `/healthz` through a reusable handler and router dependency path, adding request middleware for panic recovery, request ids, and structured request logging, introducing shared JSON response and validation helpers, defining the tenant/request context carrier for upcoming auth work, and adding service/repository interface contracts for later phases. The backend test suite passed with `go test ./...` after the changes, so the repo is ready to move into phase 2 without reworking the request pipeline.
+
+## Entry
+
+### 2026-07-04 22:49:00 IST
+
+Prompt summary:
+
+The user asked to review the repo guidance documents again, align to the development plan, and begin implementation for phase 2.
+
+Decision points:
+
+- Whether phase 2 should wait for the full phase 3 persistence schema or land the tenant-authentication slice now with only the tenant/app data it depends on.
+- Whether JWT handling should pull in a third-party library immediately or stay explicit and local for the first auth slice.
+- What the first protected endpoint should be before real flag handlers exist.
+
+AI recommendation:
+
+The recommendation was to keep phase 2 small and vertical: add only the tenant table and seed data needed for app-id lookup, implement a tenant-app DAO plus JWT verification, wire auth middleware into the existing request pipeline, and expose one protected probe endpoint so tenant context can be verified end to end before flag CRUD work starts. To keep the first slice explicit and dependency-light, the recommendation was to implement HS256 JWT verification directly in the backend instead of expanding the module surface area before the flag domain arrives.
+
+User response:
+
+The user asked to start with phase 2 after reviewing `agents.md`, `docs/plans/development_plan.md`, and `docs/tech-spec/`.
+
+Resulting direction:
+
+Phase 2 was implemented in `feat-manager` by adding a `tenants` migration and phase-2 seed data, a MySQL tenant-app lookup repository, JWT-based authentication service and middleware, a protected `GET /v1/auth/check` verification route, and table-driven tests for missing headers, invalid JWTs, expired JWTs, app-id mismatch, and successful tenant-context injection. The backend suite passed with `go test ./...`, using a repo-local Go build cache path so tests stay runnable in restricted environments too.
+
+## Entry
+
+### 2026-07-04 23:12:00 IST
+
+Prompt summary:
+
+The user asked for the exact `curl` command to hit the new authenticated endpoint and a quick script under `feat-client` to generate JWTs for testing.
+
+Decision points:
+
+- Whether to keep the JWT helper as documentation-only or add a runnable repo script.
+- Whether the helper should introduce a package dependency or stay dependency-free.
+
+AI recommendation:
+
+The recommendation was to add a tiny runnable helper directly under `feat-client` so the repo contains the promised client-side snippet in executable form, while keeping it dependency-free by using Node's built-in `crypto` module for HS256 signing.
+
+User response:
+
+The user asked for the curl command and a quick JWT generation script in `feat-client`.
+
+Resulting direction:
+
+`feat-client` now contains a small `scripts/generate-jwt.mjs` helper that emits a tenant JWT using environment overrides for app id, secret, subject, and expiration. The `feat-client/README.md` file now documents both token generation and the matching `curl` call for `GET /v1/auth/check` against the local `feat-manager` service.
