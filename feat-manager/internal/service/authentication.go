@@ -14,9 +14,11 @@ import (
 )
 
 var (
-	ErrTenantAppNotFound = errors.New("tenant app not found")
-	ErrInvalidToken      = errors.New("invalid token")
-	ErrTokenExpired      = errors.New("token expired")
+	ErrTenantAppNotFound    = errors.New("tenant app not found")
+	ErrFlagNotFound         = errors.New("flag not found")
+	ErrFlagOverrideNotFound = errors.New("flag override not found")
+	ErrInvalidToken         = errors.New("invalid token")
+	ErrTokenExpired         = errors.New("token expired")
 )
 
 type AuthenticatedTenant struct {

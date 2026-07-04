@@ -63,6 +63,28 @@ curl http://localhost:8080/v1/auth/check \
   -H "X-App-ID: app-acme"
 ```
 
+## Phase 3 persistence slice
+
+Phase 3 adds the flag and flag-user override tables plus the repository layer that will back the flag APIs.
+
+- Migrations:
+  - `db/migrations/000003_phase3_flags.up.sql`
+  - `db/migrations/000003_phase3_flags.down.sql`
+- Repositories:
+  - `internal/dao/flag_repository.go`
+  - `internal/dao/flag_user_override_repository.go`
+- DB-backed integration tests:
+  - set `TEST_DB_DSN` to a MySQL DSN,
+  - run `make deps-up`,
+  - run `make migrate-up`,
+  - run `go test ./...`.
+
+Example DSN:
+
+```bash
+export TEST_DB_DSN='feat_manager:feat_manager@tcp(127.0.0.1:3306)/feat_manager?parseTime=true&multiStatements=true'
+```
+
 ## Test command
 
 ```bash

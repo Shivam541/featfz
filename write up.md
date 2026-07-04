@@ -288,3 +288,29 @@ The user asked for the curl command and a quick JWT generation script in `feat-c
 Resulting direction:
 
 `feat-client` now contains a small `scripts/generate-jwt.mjs` helper that emits a tenant JWT using environment overrides for app id, secret, subject, and expiration. The `feat-client/README.md` file now documents both token generation and the matching `curl` call for `GET /v1/auth/check` against the local `feat-manager` service.
+
+## Entry
+
+### 2026-07-04 23:22:46 IST
+
+Prompt summary:
+
+The user asked to review `agents.md`, `docs/plans/development_plan.md`, and `docs/tech-spec/`, then begin implementation from phase 3.
+
+Decision points:
+
+- What the phase 3 schema should include for flags and flag-user overrides.
+- How to enforce tenant scoping and archive-aware reads at the repository layer.
+- How to add DB-backed test fixtures without breaking the normal unit test flow.
+
+AI recommendation:
+
+The recommended phase 3 slice was to add real MySQL migrations for `flags` and `flag_user_overrides`, keep the soft-archive model by using `archived_at`, and implement repository methods that always scope by tenant and ignore archived flags in active reads. For testing, the recommendation was to keep the integration tests self-contained with a `TEST_DB_DSN` gate, so the default `go test ./...` path stays green while the DB-backed cases can run against a local MySQL container after `make deps-up` and `make migrate-up`.
+
+User response:
+
+The user asked to start with phase 3 after reading the repo guidance and development plan.
+
+Resulting direction:
+
+Phase 3 is now in place in `feat-manager`: new migrations create `flags` and `flag_user_overrides`, repository implementations support create, list, find, update, archive, and bulk upsert flows, and DAO integration tests cover tenant scoping, unique constraints, archive visibility, and override upsert behavior. The backend test suite passes with `go test ./...`, and the README now documents the new persistence slice and its optional DB-backed test setup.

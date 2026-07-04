@@ -16,6 +16,8 @@ type Flag struct {
 	Description    string
 	DefaultEnabled bool
 	ArchivedAt     *time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type FlagUserOverride struct {
