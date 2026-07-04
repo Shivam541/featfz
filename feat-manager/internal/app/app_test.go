@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -26,6 +28,7 @@ func TestNew(t *testing.T) {
 			OpenDB: func(context.Context, config.Config) (*sql.DB, error) {
 				return &sql.DB{}, nil
 			},
+			Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		})
 		if err != nil {
 			t.Fatalf("expected nil error, got %v", err)
@@ -46,6 +49,7 @@ func TestNew(t *testing.T) {
 			OpenDB: func(context.Context, config.Config) (*sql.DB, error) {
 				return nil, errors.New("db down")
 			},
+			Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		})
 		if err == nil {
 			t.Fatal("expected error, got nil")

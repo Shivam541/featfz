@@ -1,13 +1,37 @@
 package httpapi
 
 import (
+	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/shivam/featfz/feat-manager/internal/http/handlers"
+	"github.com/shivam/featfz/feat-manager/internal/http/middleware"
+	"github.com/shivam/featfz/feat-manager/internal/service"
 )
 
-func NewRouter() http.Handler {
+type RouterDependencies struct {
+	Logger        *slog.Logger
+	HealthChecker service.HealthChecker
+}
+
+func NewRouter(deps RouterDependencies) http.Handler {
+	logger := deps.Logger
+	if logger == nil {
+		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+
+	healthChecker := deps.HealthChecker
+	if healthChecker == nil {
+		healthChecker = service.StaticHealthChecker{}
+	}
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", handlers.Health)
-	return mux
+	mux.Handle("GET /healthz", handlers.NewHealth(healthChecker))
+
+	return middleware.Chain(mux,
+		middleware.Recover(logger),
+		middleware.RequestContext(),
+		middleware.RequestLogging(logger),
+	)
 }

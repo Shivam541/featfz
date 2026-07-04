@@ -1,17 +1,28 @@
 package handlers
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
+
+	"github.com/shivam/featfz/feat-manager/internal/service"
 )
+
+type stubHealthChecker struct {
+	status string
+}
+
+func (s stubHealthChecker) Check(context.Context) service.HealthStatus {
+	return service.HealthStatus{Status: s.status}
+}
 
 func TestHealth(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rec := httptest.NewRecorder()
 
-	Health(rec, req)
+	NewHealth(stubHealthChecker{status: "ok"}).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", rec.Code)
@@ -21,10 +32,20 @@ func TestHealth(t *testing.T) {
 		t.Fatalf("expected application/json content type, got %q", got)
 	}
 
-	body := rec.Body.String()
-	for _, want := range []string{`"success":true`, `"status":"ok"`} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("expected body to contain %q, got %q", want, body)
-		}
+	var body struct {
+		Success bool   `json:"success"`
+		Status  string `json:"status"`
+	}
+
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected valid json body, got %v", err)
+	}
+
+	if !body.Success {
+		t.Fatal("expected success=true")
+	}
+
+	if body.Status != "ok" {
+		t.Fatalf("expected status ok, got %q", body.Status)
 	}
 }

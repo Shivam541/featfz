@@ -1,21 +1,25 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
+
+	"github.com/shivam/featfz/feat-manager/internal/http/response"
+	"github.com/shivam/featfz/feat-manager/internal/service"
 )
 
-type healthResponse struct {
-	Success bool   `json:"success"`
-	Status  string `json:"status"`
+type HealthHandler struct {
+	health service.HealthChecker
 }
 
-func Health(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+func NewHealth(health service.HealthChecker) http.Handler {
+	return HealthHandler{health: health}
+}
 
-	_ = json.NewEncoder(w).Encode(healthResponse{
-		Success: true,
-		Status:  "ok",
+func (h HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	status := h.health.Check(r.Context())
+
+	response.WriteJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"status":  status.Status,
 	})
 }
