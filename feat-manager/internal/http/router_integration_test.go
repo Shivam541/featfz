@@ -88,6 +88,124 @@ func TestCreateFlagRouteIntegration(t *testing.T) {
 	}
 }
 
+func TestFlagCrudRoutesIntegration(t *testing.T) {
+	db := openRouterIntegrationDB(t)
+	resetRouterIntegrationTables(t, db)
+	ctx := context.Background()
+
+	tenantID := insertRouterIntegrationTenant(t, db, "acme", "app-acme", "acme-secret")
+	now := time.Unix(1_720_000_000, 0).UTC()
+
+	router := NewRouter(RouterDependencies{
+		HealthChecker: service.StaticHealthChecker{},
+		Authenticator: service.AuthenticationService{
+			TenantApps:    dao.NewTenantAppRepository(db),
+			TokenVerifier: service.HS256JWTVerifier{},
+			Now:           func() time.Time { return now },
+		},
+		FlagController: controller.NewFlagController(service.NewFlagService(dao.NewFlagRepository(db)), validation.NewValidator()),
+	})
+
+	createReq := httptest.NewRequest(http.MethodPost, "/v1/flags", strings.NewReader(`{
+		"key": "new_dashboard",
+		"description": "Enable the new dashboard experience",
+		"default_enabled": false
+	}`))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("X-App-ID", "app-acme")
+	createReq.Header.Set("Authorization", "Bearer "+testRouterJWT(t, "acme-secret", map[string]any{
+		"app_id": "app-acme",
+		"sub":    "user-123",
+		"exp":    now.Add(time.Hour).Unix(),
+	}))
+	createRec := httptest.NewRecorder()
+	router.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected create 201, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/v1/flags", nil)
+	listReq.Header.Set("X-App-ID", "app-acme")
+	listReq.Header.Set("Authorization", "Bearer "+testRouterJWT(t, "acme-secret", map[string]any{
+		"app_id": "app-acme",
+		"sub":    "user-123",
+		"exp":    now.Add(time.Hour).Unix(),
+	}))
+	listRec := httptest.NewRecorder()
+	router.ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("expected list 200, got %d: %s", listRec.Code, listRec.Body.String())
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/v1/flags/new_dashboard", nil)
+	getReq.SetPathValue("flagKey", "new_dashboard")
+	getReq.Header.Set("X-App-ID", "app-acme")
+	getReq.Header.Set("Authorization", "Bearer "+testRouterJWT(t, "acme-secret", map[string]any{
+		"app_id": "app-acme",
+		"sub":    "user-123",
+		"exp":    now.Add(time.Hour).Unix(),
+	}))
+	getRec := httptest.NewRecorder()
+	router.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("expected get 200, got %d: %s", getRec.Code, getRec.Body.String())
+	}
+
+	updateReq := httptest.NewRequest(http.MethodPatch, "/v1/flags/new_dashboard", strings.NewReader(`{
+		"description": "Updated rollout",
+		"default_enabled": true
+	}`))
+	updateReq.Header.Set("Content-Type", "application/json")
+	updateReq.SetPathValue("flagKey", "new_dashboard")
+	updateReq.Header.Set("X-App-ID", "app-acme")
+	updateReq.Header.Set("Authorization", "Bearer "+testRouterJWT(t, "acme-secret", map[string]any{
+		"app_id": "app-acme",
+		"sub":    "user-123",
+		"exp":    now.Add(time.Hour).Unix(),
+	}))
+	updateRec := httptest.NewRecorder()
+	router.ServeHTTP(updateRec, updateReq)
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("expected update 200, got %d: %s", updateRec.Code, updateRec.Body.String())
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/v1/flags/new_dashboard", nil)
+	deleteReq.SetPathValue("flagKey", "new_dashboard")
+	deleteReq.Header.Set("X-App-ID", "app-acme")
+	deleteReq.Header.Set("Authorization", "Bearer "+testRouterJWT(t, "acme-secret", map[string]any{
+		"app_id": "app-acme",
+		"sub":    "user-123",
+		"exp":    now.Add(time.Hour).Unix(),
+	}))
+	deleteRec := httptest.NewRecorder()
+	router.ServeHTTP(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusOK {
+		t.Fatalf("expected delete 200, got %d: %s", deleteRec.Code, deleteRec.Body.String())
+	}
+
+	afterDeleteGetReq := httptest.NewRequest(http.MethodGet, "/v1/flags/new_dashboard", nil)
+	afterDeleteGetReq.SetPathValue("flagKey", "new_dashboard")
+	afterDeleteGetReq.Header.Set("X-App-ID", "app-acme")
+	afterDeleteGetReq.Header.Set("Authorization", "Bearer "+testRouterJWT(t, "acme-secret", map[string]any{
+		"app_id": "app-acme",
+		"sub":    "user-123",
+		"exp":    now.Add(time.Hour).Unix(),
+	}))
+	afterDeleteRec := httptest.NewRecorder()
+	router.ServeHTTP(afterDeleteRec, afterDeleteGetReq)
+	if afterDeleteRec.Code != http.StatusNotFound {
+		t.Fatalf("expected archived get 404, got %d: %s", afterDeleteRec.Code, afterDeleteRec.Body.String())
+	}
+
+	var remaining int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM flags WHERE tenant_id = ? AND archived_at IS NULL`, tenantID).Scan(&remaining); err != nil {
+		t.Fatalf("count remaining flags: %v", err)
+	}
+	if remaining != 0 {
+		t.Fatalf("expected no active flags remaining, got %d", remaining)
+	}
+}
+
 func openRouterIntegrationDB(t *testing.T) *sql.DB {
 	t.Helper()
 

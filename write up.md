@@ -394,3 +394,54 @@ The user asked to push the docs change and make the code changes that follow the
 Resulting direction:
 
 The repo now uses GORM-backed entity mappings under `internal/entity/`, validator-based payload checking under `internal/http/controller/flag_controller.go`, and a grouped flag controller wired through startup and the router. The repository layer still passes the full Go test suite, and the refactor has been recorded in the write-up so the next slice can continue from the new architecture instead of the older one-off handler pattern.
+
+## Entry
+
+### 2026-07-05 00:35:12 IST
+
+Prompt summary:
+
+The user asked to read the repo docs, start from the development plan and tech spec, and begin phase 5.
+
+Decision points:
+
+- Whether phase 5 should stay narrow and finish only flag CRUD, or expand into evaluation and overrides.
+- How to expose list/get/update/archive without breaking the current create-flag and auth flow.
+- How to keep tenant isolation and archived-flag behavior consistent across HTTP, service, repository, and tests.
+
+AI recommendation:
+
+The recommendation was to keep phase 5 focused on the remaining flag-management surface only. I added grouped CRUD methods to the flag service, exposed `GET /v1/flags`, `GET /v1/flags/{flagKey}`, `PATCH /v1/flags/{flagKey}`, and `DELETE /v1/flags/{flagKey}`, kept archive as a soft delete, and wired the routes through the authenticated router. I also added controller, service, and integration tests that verify tenant-scoped reads, partial updates, and archived flags becoming unavailable on active reads.
+
+User response:
+
+The user asked to start with phase 5 after reviewing the repo guidance and docs.
+
+Resulting direction:
+
+Phase 5 is now implemented in `feat-manager` with list/get/update/archive flag routes, tenant-scoped active-only reads, soft archive behavior, and full `go test ./...` coverage passing. The backend README now documents the phase 5 routes, curl examples, and verification steps so the next phase can build on the completed flag-management surface.
+
+## Entry
+
+### 2026-07-05 01:00:03 IST
+
+Prompt summary:
+
+The user clarified that JWT token creation already exists in the client folder using Node and asked to add that detail to the agent guidance or the main service README.
+
+Decision points:
+
+- Whether to document the token helper in the backend README, the repo agent guidance, or both.
+- How to point curl users at the real Node helper without duplicating the JWT-signing logic in another place.
+
+AI recommendation:
+
+The recommendation was to document the existing helper in the backend README and reference the exact script path, `feat-client/scripts/generate-jwt.mjs`, so curl users can generate a valid HS256 token with `node` before hitting the authenticated endpoints.
+
+User response:
+
+The user clarified that token creation already exists in the client folder and asked for that to be added to the repo docs.
+
+Resulting direction:
+
+`feat-manager/README.md` now points the curl examples at `feat-client/scripts/generate-jwt.mjs` and shows `TOKEN=$(node ../feat-client/scripts/generate-jwt.mjs)` as the supported way to build a JWT for the backend requests.

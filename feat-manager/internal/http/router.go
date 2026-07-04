@@ -34,6 +34,10 @@ func NewRouter(dependencies RouterDependencies) http.Handler {
 	mux.Handle("GET /v1/auth/check", middleware.RequireAuth(dependencies.Authenticator)(handlers.NewAuthCheck()))
 	if dependencies.FlagController != nil {
 		mux.Handle("POST /v1/flags", middleware.RequireAuth(dependencies.Authenticator)(http.HandlerFunc(dependencies.FlagController.CreateFlag)))
+		mux.Handle("GET /v1/flags", middleware.RequireAuth(dependencies.Authenticator)(http.HandlerFunc(dependencies.FlagController.ListFlags)))
+		mux.Handle("GET /v1/flags/{flagKey}", middleware.RequireAuth(dependencies.Authenticator)(http.HandlerFunc(dependencies.FlagController.GetFlag)))
+		mux.Handle("PATCH /v1/flags/{flagKey}", middleware.RequireAuth(dependencies.Authenticator)(http.HandlerFunc(dependencies.FlagController.UpdateFlag)))
+		mux.Handle("DELETE /v1/flags/{flagKey}", middleware.RequireAuth(dependencies.Authenticator)(http.HandlerFunc(dependencies.FlagController.ArchiveFlag)))
 	}
 
 	return middleware.Chain(mux,

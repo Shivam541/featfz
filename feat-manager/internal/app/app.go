@@ -24,8 +24,8 @@ type Dependencies struct {
 	NewTenantAppRepository func(*sql.DB) service.TenantAppRepository
 	NewFlagRepository      func(*sql.DB) service.FlagRepository
 	NewAuthenticator       func(service.TenantAppRepository) service.Authenticator
-	NewFlagService         func(service.FlagRepository) service.FlagCreator
-	NewFlagController      func(service.FlagCreator) *controller.FlagController
+	NewFlagService         func(service.FlagRepository) service.FlagManager
+	NewFlagController      func(service.FlagManager) *controller.FlagController
 }
 
 type Runtime struct {
@@ -73,14 +73,14 @@ func New(ctx context.Context, cfg config.Config, dependencies Dependencies) (*Ru
 
 	newFlagService := dependencies.NewFlagService
 	if newFlagService == nil {
-		newFlagService = func(repo service.FlagRepository) service.FlagCreator {
+		newFlagService = func(repo service.FlagRepository) service.FlagManager {
 			return service.NewFlagService(repo)
 		}
 	}
 
 	newFlagController := dependencies.NewFlagController
 	if newFlagController == nil {
-		newFlagController = func(flagService service.FlagCreator) *controller.FlagController {
+		newFlagController = func(flagService service.FlagManager) *controller.FlagController {
 			return controller.NewFlagController(flagService, validation.NewValidator())
 		}
 	}

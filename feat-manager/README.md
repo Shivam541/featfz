@@ -119,6 +119,68 @@ curl -X POST http://localhost:8080/v1/flags \
   }'
 ```
 
+## Phase 5 flag-management slice
+
+Phase 5 completes the flag-management surface with tenant-scoped list, get, update, and archive routes.
+
+- Routes:
+  - `GET /v1/flags`
+  - `GET /v1/flags/{flagKey}`
+  - `PATCH /v1/flags/{flagKey}`
+  - `DELETE /v1/flags/{flagKey}`
+- Behavior:
+  - reads only return active flags for the authenticated tenant,
+  - `PATCH` accepts `description` and/or `default_enabled`,
+  - archived flags are hidden from list/get/update and return `404` on read paths,
+  - archive is soft, not hard delete.
+- Expected responses:
+  - `200 OK` on list, get, update, and archive success,
+  - `400 Bad Request` for invalid path or body input,
+  - `404 Not Found` when the tenant flag does not exist or is already archived.
+- Verification:
+  - run `go test ./...`
+  - if you want DB-backed coverage, set `TEST_DB_DSN`, run `make deps-up`, run `make migrate-up`, and then run `go test ./...`
+
+Example curl calls:
+
+JWTs for these requests can be generated with the Node helper in `feat-client/scripts/generate-jwt.mjs`.
+It defaults to `JWT_SECRET=acme-secret`, `APP_ID=app-acme`, and `JWT_SUBJECT=smoke-user`, so you can run:
+
+```bash
+TOKEN=$(node ../feat-client/scripts/generate-jwt.mjs)
+```
+
+Set `JWT_SUBJECT` if you want a different subject, then reuse `$TOKEN` in the curls below.
+
+```bash
+curl http://localhost:8080/v1/flags \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-App-ID: $APP_ID"
+```
+
+```bash
+curl http://localhost:8080/v1/flags/new_dashboard \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-App-ID: $APP_ID"
+```
+
+```bash
+curl -X PATCH http://localhost:8080/v1/flags/new_dashboard \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-App-ID: $APP_ID" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Updated rollout",
+    "default_enabled": true
+  }'
+```
+
+```bash
+curl -X DELETE http://localhost:8080/v1/flags/new_dashboard \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-App-ID: $APP_ID"
+```
+
 ## Test command
 
 ```bash

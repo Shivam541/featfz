@@ -189,3 +189,34 @@ func (routerFlagCreator) Create(context.Context, int64, service.CreateFlagInput)
 		DefaultEnabled: true,
 	}, nil
 }
+
+func (routerFlagCreator) List(context.Context, int64) ([]domain.Flag, error) {
+	return []domain.Flag{{
+		ID:             42,
+		TenantID:       21,
+		Key:            "new_dashboard",
+		DefaultEnabled: true,
+	}}, nil
+}
+
+func (routerFlagCreator) Get(context.Context, int64, string) (domain.Flag, error) {
+	return domain.Flag{
+		ID:             42,
+		TenantID:       21,
+		Key:            "new_dashboard",
+		DefaultEnabled: true,
+	}, nil
+}
+
+func (routerFlagCreator) Update(context.Context, int64, string, service.UpdateFlagInput) (domain.Flag, error) {
+	return domain.Flag{
+		ID:             42,
+		TenantID:       21,
+		Key:            "new_dashboard",
+		DefaultEnabled: true,
+	}, nil
+}
+
+func (routerFlagCreator) Archive(context.Context, int64, string) error {
+	return nil
+}
