@@ -12,10 +12,14 @@ Go backend for the feature flag monorepo.
 6. `make run`
 7. `make smoke-eval`
 8. `make hooks-install`
+9. `make migrate-status`
+10. `make migrate-create NAME=<name>`
 
 `make test`, `make run`, and `make build` use a repo-local Go build cache under `.cache/go-build`.
 `make smoke-eval` expects the API to be running locally on `127.0.0.1:8080`.
 `make hooks-install` sets `core.hooksPath` to `.githooks` so the local pre-push hook blocks pushes when tests fail.
+`make migrate-status` checks the current migration state.
+`make migrate-create NAME=<name>` scaffolds a new SQL migration under `db/migrations`.
 
 ## Phase 2 auth slice
 
@@ -251,6 +255,9 @@ Phase 8 starts with a local smoke workflow for the eval path.
   - `make smoke-eval`
 - Hook:
   - `make hooks-install`
+- Migration helpers:
+  - `make migrate-status`
+  - `make migrate-create NAME=<name>`
 - What it does:
   - generates JWTs for `app-acme` and `app-globex`,
   - creates the same smoke flag in both tenants,
@@ -260,6 +267,9 @@ Phase 8 starts with a local smoke workflow for the eval path.
   - runs `make test` before every push,
   - exits non-zero if tests fail,
   - blocks the push when the test suite is red.
+- What the migration helpers do:
+  - `make migrate-status` prints whether the local database is up to date,
+  - `make migrate-create NAME=<name>` creates a new SQL migration file pair.
 - Requirements:
   - backend running on `127.0.0.1:8080`,
   - MySQL running with the seeded tenants.

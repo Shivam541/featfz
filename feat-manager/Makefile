@@ -1,7 +1,7 @@
 SHELL := /bin/sh
 GOCACHE ?= $(CURDIR)/.cache/go-build
 
-.PHONY: setup deps-up deps-down test run build migrate-up migrate-down fmt seed-phase2 smoke-eval hooks-install cache-dir
+.PHONY: setup deps-up deps-down test run build migrate-up migrate-down migrate-status migrate-create fmt seed-phase2 smoke-eval hooks-install cache-dir
 
 cache-dir:
 	mkdir -p "$(GOCACHE)"
@@ -31,6 +31,13 @@ migrate-up:
 
 migrate-down:
 	docker compose --profile tools run --rm migrate down 1
+
+migrate-status:
+	docker compose --profile tools run --rm migrate status
+
+migrate-create:
+	@if [ -z "$(NAME)" ]; then echo "NAME is required, e.g. make migrate-create NAME=phase4_flags"; exit 1; fi
+	docker compose --profile tools run --rm migrate create -ext sql -dir /migrations "$(NAME)"
 
 fmt:
 	gofmt -w ./cmd ./internal

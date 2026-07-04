@@ -572,3 +572,28 @@ The user asked to begin phase 8 with a local pre-push hook that blocks on failin
 Resulting direction:
 
 Phase 8 now includes a repo-tracked pre-push hook and a local install target, both centered on the existing `make test` command.
+
+## Entry
+
+### 2026-07-05
+
+Prompt summary:
+
+The user asked to keep going on phase 8 after the hook work was in place.
+
+Decision points:
+
+- Whether the next improvement should be more docs, another helper command, or a fixture workflow.
+- Whether migration helpers should wrap the existing docker-compose migrate container or introduce a separate script.
+
+AI recommendation:
+
+The recommendation was to extend the Makefile with migration workflow helpers that reuse the existing compose-based migrate container: `make migrate-status` and `make migrate-create NAME=<name>`. I also documented those helpers in the backend README alongside the hook and smoke workflow so the dev path is easy to discover.
+
+User response:
+
+The user confirmed to continue phase 8.
+
+Resulting direction:
+
+Phase 8 now has migration workflow helpers in addition to the smoke target and pre-push hook.
