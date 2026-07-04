@@ -85,6 +85,40 @@ Example DSN:
 export TEST_DB_DSN='feat_manager:feat_manager@tcp(127.0.0.1:3306)/feat_manager?parseTime=true&multiStatements=true'
 ```
 
+## Phase 4 create-flag slice
+
+Phase 4 adds the first full management flow: creating a tenant-scoped flag through authenticated HTTP and persisting it to MySQL.
+
+- Route:
+  - `POST /v1/flags`
+- Request body:
+  - `key`
+  - `description`
+  - `default_enabled`
+- Expected responses:
+  - `201 Created` on success
+  - `400 Bad Request` for malformed or incomplete JSON
+  - `409 Conflict` when the tenant already owns that key
+- Integration test:
+  - set `TEST_DB_DSN`,
+  - run `make deps-up`,
+  - run `make migrate-up`,
+  - run `go test ./...`
+
+Example curl:
+
+```bash
+curl -X POST http://localhost:8080/v1/flags \
+  -H "Authorization: Bearer $TENANT_JWT" \
+  -H "X-App-ID: $APP_ID" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "key": "new_dashboard",
+    "description": "Enable the new dashboard experience",
+    "default_enabled": false
+  }'
+```
+
 ## Test command
 
 ```bash

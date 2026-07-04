@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/shivam/featfz/feat-manager/internal/domain"
 	"github.com/shivam/featfz/feat-manager/internal/service"
 )
@@ -37,6 +38,11 @@ VALUES (?, ?, ?, ?)
 
 	result, err := r.db.ExecContext(ctx, query, flag.TenantID, flag.Key, description, flag.DefaultEnabled)
 	if err != nil {
+		var mysqlErr *mysql.MySQLError
+		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+			return domain.Flag{}, service.ErrFlagAlreadyExists
+		}
+
 		return domain.Flag{}, fmt.Errorf("insert flag: %w", err)
 	}
 

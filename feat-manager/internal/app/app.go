@@ -16,11 +16,13 @@ import (
 )
 
 type Dependencies struct {
-	OpenDB        func(context.Context, config.Config) (*sql.DB, error)
-	Logger        *slog.Logger
-	HealthChecker service.HealthChecker
-	NewTenantApps func(*sql.DB) service.TenantAppRepository
-	NewAuth       func(service.TenantAppRepository) service.Authenticator
+	OpenDB         func(context.Context, config.Config) (*sql.DB, error)
+	Logger         *slog.Logger
+	HealthChecker  service.HealthChecker
+	NewTenantApps  func(*sql.DB) service.TenantAppRepository
+	NewFlags       func(*sql.DB) service.FlagRepository
+	NewAuth        func(service.TenantAppRepository) service.Authenticator
+	NewFlagCreator func(service.FlagRepository) service.FlagCreator
 }
 
 type Runtime struct {
@@ -51,11 +53,25 @@ func New(ctx context.Context, cfg config.Config, deps Dependencies) (*Runtime, e
 		}
 	}
 
+	newFlags := deps.NewFlags
+	if newFlags == nil {
+		newFlags = func(db *sql.DB) service.FlagRepository {
+			return dao.NewFlagRepository(db)
+		}
+	}
+
 	newAuth := deps.NewAuth
 	if newAuth == nil {
 		newAuth = func(repo service.TenantAppRepository) service.Authenticator {
 			authenticator := service.NewAuthenticationService(repo)
 			return authenticator
+		}
+	}
+
+	newFlagCreator := deps.NewFlagCreator
+	if newFlagCreator == nil {
+		newFlagCreator = func(repo service.FlagRepository) service.FlagCreator {
+			return service.NewFlagCreationService(repo)
 		}
 	}
 
@@ -65,7 +81,9 @@ func New(ctx context.Context, cfg config.Config, deps Dependencies) (*Runtime, e
 	}
 
 	tenantApps := newTenantApps(db)
+	flags := newFlags(db)
 	authenticator := newAuth(tenantApps)
+	flagCreator := newFlagCreator(flags)
 
 	return &Runtime{
 		DB: db,
@@ -73,6 +91,7 @@ func New(ctx context.Context, cfg config.Config, deps Dependencies) (*Runtime, e
 			Logger:        logger,
 			HealthChecker: healthChecker,
 			Authenticator: authenticator,
+			FlagCreator:   flagCreator,
 		}),
 	}, nil
 }

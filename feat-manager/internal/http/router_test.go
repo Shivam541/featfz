@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -43,6 +44,7 @@ func TestNewRouter(t *testing.T) {
 			TokenVerifier: service.HS256JWTVerifier{},
 			Now:           func() time.Time { return time.Unix(1_720_000_000, 0).UTC() },
 		},
+		FlagCreator: routerFlagCreator{},
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -77,6 +79,7 @@ func TestNewRouterProtectedRoute(t *testing.T) {
 			TokenVerifier: service.HS256JWTVerifier{},
 			Now:           func() time.Time { return now },
 		},
+		FlagCreator: routerFlagCreator{},
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/check", nil)
@@ -92,6 +95,44 @@ func TestNewRouterProtectedRoute(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestNewRouterCreateFlagRoute(t *testing.T) {
+	now := time.Unix(1_720_000_000, 0).UTC()
+	router := NewRouter(RouterDependencies{
+		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		HealthChecker: stubHealthChecker{status: "ok"},
+		Authenticator: service.AuthenticationService{
+			TenantApps: routerTenantApps{
+				records: map[string]domain.TenantApp{
+					"app-acme": {
+						TenantID:  21,
+						AppID:     "app-acme",
+						JWTSecret: "phase2-secret",
+					},
+				},
+			},
+			TokenVerifier: service.HS256JWTVerifier{},
+			Now:           func() time.Time { return now },
+		},
+		FlagCreator: routerFlagCreator{},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/flags", bytes.NewBufferString(`{"key":"new_dashboard","default_enabled":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-App-ID", "app-acme")
+	req.Header.Set("Authorization", "Bearer "+routerJWT(t, "phase2-secret", map[string]any{
+		"app_id": "app-acme",
+		"sub":    "user-123",
+		"exp":    now.Add(time.Hour).Unix(),
+	}))
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", rec.Code)
 	}
 }
 
@@ -134,4 +175,15 @@ func routerJWT(t *testing.T, secret string, claims map[string]any) string {
 func middlewareJWT(t *testing.T, secret string, claims map[string]any) string {
 	t.Helper()
 	return routerJWT(t, secret, claims)
+}
+
+type routerFlagCreator struct{}
+
+func (routerFlagCreator) Create(context.Context, int64, service.CreateFlagInput) (domain.Flag, error) {
+	return domain.Flag{
+		ID:             42,
+		TenantID:       21,
+		Key:            "new_dashboard",
+		DefaultEnabled: true,
+	}, nil
 }

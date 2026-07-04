@@ -5,8 +5,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/go-sql-driver/mysql"
-
 	"github.com/shivam/featfz/feat-manager/internal/domain"
 	"github.com/shivam/featfz/feat-manager/internal/service"
 )
@@ -135,7 +133,9 @@ func TestFlagRepository(t *testing.T) {
 			Description:    "second",
 			DefaultEnabled: false,
 		})
-		requireDuplicateError(t, err)
+		if !errors.Is(err, service.ErrFlagAlreadyExists) {
+			t.Fatalf("expected duplicate key error, got %v", err)
+		}
 
 		otherTenantFlag, err := repo.Create(ctx, domain.Flag{
 			TenantID:       tenantTwoID,
@@ -179,11 +179,7 @@ func TestFlagRepositoryDuplicateErrorType(t *testing.T) {
 	}
 
 	_, err := repo.Create(ctx, domain.Flag{TenantID: tenantID, Key: "dup", DefaultEnabled: false})
-	var mysqlErr *mysql.MySQLError
-	if !errors.As(err, &mysqlErr) {
-		t.Fatalf("expected mysql error, got %v", err)
-	}
-	if mysqlErr.Number != 1062 {
-		t.Fatalf("expected duplicate key error 1062, got %d", mysqlErr.Number)
+	if !errors.Is(err, service.ErrFlagAlreadyExists) {
+		t.Fatalf("expected duplicate key error, got %v", err)
 	}
 }
