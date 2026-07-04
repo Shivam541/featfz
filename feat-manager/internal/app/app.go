@@ -11,18 +11,21 @@ import (
 	"github.com/shivam/featfz/feat-manager/internal/config"
 	"github.com/shivam/featfz/feat-manager/internal/dao"
 	httpapi "github.com/shivam/featfz/feat-manager/internal/http"
+	"github.com/shivam/featfz/feat-manager/internal/http/controller"
+	"github.com/shivam/featfz/feat-manager/internal/http/validation"
 	"github.com/shivam/featfz/feat-manager/internal/mysql"
 	"github.com/shivam/featfz/feat-manager/internal/service"
 )
 
 type Dependencies struct {
-	OpenDB         func(context.Context, config.Config) (*sql.DB, error)
-	Logger         *slog.Logger
-	HealthChecker  service.HealthChecker
-	NewTenantApps  func(*sql.DB) service.TenantAppRepository
-	NewFlags       func(*sql.DB) service.FlagRepository
-	NewAuth        func(service.TenantAppRepository) service.Authenticator
-	NewFlagCreator func(service.FlagRepository) service.FlagCreator
+	OpenDB                 func(context.Context, config.Config) (*sql.DB, error)
+	Logger                 *slog.Logger
+	HealthChecker          service.HealthChecker
+	NewTenantAppRepository func(*sql.DB) service.TenantAppRepository
+	NewFlagRepository      func(*sql.DB) service.FlagRepository
+	NewAuthenticator       func(service.TenantAppRepository) service.Authenticator
+	NewFlagService         func(service.FlagRepository) service.FlagCreator
+	NewFlagController      func(service.FlagCreator) *controller.FlagController
 }
 
 type Runtime struct {
@@ -30,48 +33,55 @@ type Runtime struct {
 	Handler http.Handler
 }
 
-func New(ctx context.Context, cfg config.Config, deps Dependencies) (*Runtime, error) {
-	openDB := deps.OpenDB
+func New(ctx context.Context, cfg config.Config, dependencies Dependencies) (*Runtime, error) {
+	openDB := dependencies.OpenDB
 	if openDB == nil {
 		openDB = mysql.Open
 	}
 
-	logger := deps.Logger
+	logger := dependencies.Logger
 	if logger == nil {
 		logger = slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	}
 
-	healthChecker := deps.HealthChecker
+	healthChecker := dependencies.HealthChecker
 	if healthChecker == nil {
 		healthChecker = service.StaticHealthChecker{}
 	}
 
-	newTenantApps := deps.NewTenantApps
-	if newTenantApps == nil {
-		newTenantApps = func(db *sql.DB) service.TenantAppRepository {
+	newTenantAppRepository := dependencies.NewTenantAppRepository
+	if newTenantAppRepository == nil {
+		newTenantAppRepository = func(db *sql.DB) service.TenantAppRepository {
 			return dao.NewTenantAppRepository(db)
 		}
 	}
 
-	newFlags := deps.NewFlags
-	if newFlags == nil {
-		newFlags = func(db *sql.DB) service.FlagRepository {
+	newFlagRepository := dependencies.NewFlagRepository
+	if newFlagRepository == nil {
+		newFlagRepository = func(db *sql.DB) service.FlagRepository {
 			return dao.NewFlagRepository(db)
 		}
 	}
 
-	newAuth := deps.NewAuth
-	if newAuth == nil {
-		newAuth = func(repo service.TenantAppRepository) service.Authenticator {
+	newAuthenticator := dependencies.NewAuthenticator
+	if newAuthenticator == nil {
+		newAuthenticator = func(repo service.TenantAppRepository) service.Authenticator {
 			authenticator := service.NewAuthenticationService(repo)
 			return authenticator
 		}
 	}
 
-	newFlagCreator := deps.NewFlagCreator
-	if newFlagCreator == nil {
-		newFlagCreator = func(repo service.FlagRepository) service.FlagCreator {
-			return service.NewFlagCreationService(repo)
+	newFlagService := dependencies.NewFlagService
+	if newFlagService == nil {
+		newFlagService = func(repo service.FlagRepository) service.FlagCreator {
+			return service.NewFlagService(repo)
+		}
+	}
+
+	newFlagController := dependencies.NewFlagController
+	if newFlagController == nil {
+		newFlagController = func(flagService service.FlagCreator) *controller.FlagController {
+			return controller.NewFlagController(flagService, validation.NewValidator())
 		}
 	}
 
@@ -80,18 +90,19 @@ func New(ctx context.Context, cfg config.Config, deps Dependencies) (*Runtime, e
 		return nil, fmt.Errorf("open db: %w", err)
 	}
 
-	tenantApps := newTenantApps(db)
-	flags := newFlags(db)
-	authenticator := newAuth(tenantApps)
-	flagCreator := newFlagCreator(flags)
+	tenantAppRepository := newTenantAppRepository(db)
+	flagRepository := newFlagRepository(db)
+	authenticator := newAuthenticator(tenantAppRepository)
+	flagService := newFlagService(flagRepository)
+	flagController := newFlagController(flagService)
 
 	return &Runtime{
 		DB: db,
 		Handler: httpapi.NewRouter(httpapi.RouterDependencies{
-			Logger:        logger,
-			HealthChecker: healthChecker,
-			Authenticator: authenticator,
-			FlagCreator:   flagCreator,
+			Logger:         logger,
+			HealthChecker:  healthChecker,
+			Authenticator:  authenticator,
+			FlagController: flagController,
 		}),
 	}, nil
 }

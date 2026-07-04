@@ -6,8 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
+
+	"gorm.io/gorm"
 
 	"github.com/shivam/featfz/feat-manager/internal/domain"
+	"github.com/shivam/featfz/feat-manager/internal/entity"
 	"github.com/shivam/featfz/feat-manager/internal/service"
 )
 
@@ -24,21 +28,10 @@ func (r *FlagOverrideRepository) BulkUpsert(ctx context.Context, tenantID int64,
 		return nil
 	}
 
-	tx, err := r.db.BeginTx(ctx, nil)
+	gormDB, err := openGormDB(r.db)
 	if err != nil {
-		return fmt.Errorf("begin bulk override upsert: %w", err)
+		return fmt.Errorf("open gorm db: %w", err)
 	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-
-	const query = `
-INSERT INTO flag_user_overrides (tenant_id, flag_id, user_id, enabled)
-VALUES (?, ?, ?, ?)
-ON DUPLICATE KEY UPDATE
-  enabled = VALUES(enabled),
-  updated_at = CURRENT_TIMESTAMP
-`
 
 	for _, override := range overrides {
 		userID := strings.TrimSpace(override.UserID)
@@ -46,13 +39,33 @@ ON DUPLICATE KEY UPDATE
 			return fmt.Errorf("bulk upsert flag overrides: user id is required")
 		}
 
-		if _, err := tx.ExecContext(ctx, query, tenantID, flagID, userID, override.Enabled); err != nil {
-			return fmt.Errorf("upsert flag override for user %q: %w", userID, err)
+		record := entity.FlagUserOverride{
+			TenantID:  tenantID,
+			FlagID:    flagID,
+			UserID:    userID,
+			Enabled:   override.Enabled,
+			UpdatedAt: time.Now().UTC(),
 		}
-	}
 
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit bulk override upsert: %w", err)
+		result := gormDB.WithContext(ctx).
+			Model(&entity.FlagUserOverride{}).
+			Where("tenant_id = ? AND flag_id = ? AND user_id = ?", tenantID, flagID, userID).
+			Updates(map[string]any{
+				"enabled":    record.Enabled,
+				"updated_at": record.UpdatedAt,
+			})
+		if result.Error != nil {
+			return fmt.Errorf("upsert flag override for user %q: %w", userID, result.Error)
+		}
+
+		if result.RowsAffected > 0 {
+			continue
+		}
+
+		record.CreatedAt = record.UpdatedAt
+		if err := gormDB.WithContext(ctx).Create(&record).Error; err != nil {
+			return fmt.Errorf("insert flag override for user %q: %w", userID, err)
+		}
 	}
 
 	return nil
@@ -64,33 +77,30 @@ func (r *FlagOverrideRepository) FindByUser(ctx context.Context, tenantID int64,
 		return domain.FlagUserOverride{}, service.ErrFlagOverrideNotFound
 	}
 
-	const query = `
-SELECT id, tenant_id, flag_id, user_id, enabled, created_at, updated_at
-FROM flag_user_overrides
-WHERE tenant_id = ? AND flag_id = ? AND user_id = ?
-LIMIT 1
-`
-
-	var override domain.FlagUserOverride
-	err := r.db.QueryRowContext(ctx, query, tenantID, flagID, userID).Scan(
-		&override.ID,
-		&override.TenantID,
-		&override.FlagID,
-		&override.UserID,
-		&override.Enabled,
-		&override.CreatedAt,
-		&override.UpdatedAt,
-	)
+	gormDB, err := openGormDB(r.db)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		return domain.FlagUserOverride{}, fmt.Errorf("open gorm db: %w", err)
+	}
+
+	var record entity.FlagUserOverride
+	err = gormDB.WithContext(ctx).
+		Where("tenant_id = ? AND flag_id = ? AND user_id = ?", tenantID, flagID, userID).
+		First(&record).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return domain.FlagUserOverride{}, service.ErrFlagOverrideNotFound
 		}
 
 		return domain.FlagUserOverride{}, fmt.Errorf("find flag override by user: %w", err)
 	}
 
-	override.CreatedAt = override.CreatedAt.UTC()
-	override.UpdatedAt = override.UpdatedAt.UTC()
-
-	return override, nil
+	return domain.FlagUserOverride{
+		ID:        record.ID,
+		TenantID:  record.TenantID,
+		FlagID:    record.FlagID,
+		UserID:    record.UserID,
+		Enabled:   record.Enabled,
+		CreatedAt: record.CreatedAt.UTC(),
+		UpdatedAt: record.UpdatedAt.UTC(),
+	}, nil
 }

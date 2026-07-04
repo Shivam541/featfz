@@ -21,15 +21,15 @@ type FlagCreator interface {
 	Create(context.Context, int64, CreateFlagInput) (domain.Flag, error)
 }
 
-type FlagCreationService struct {
+type FlagService struct {
 	Flags FlagRepository
 }
 
-func NewFlagCreationService(repo FlagRepository) FlagCreationService {
-	return FlagCreationService{Flags: repo}
+func NewFlagService(repo FlagRepository) FlagService {
+	return FlagService{Flags: repo}
 }
 
-func (s FlagCreationService) Create(ctx context.Context, tenantID int64, input CreateFlagInput) (domain.Flag, error) {
+func (s FlagService) Create(ctx context.Context, tenantID int64, input CreateFlagInput) (domain.Flag, error) {
 	input.Key = strings.TrimSpace(input.Key)
 	input.Description = strings.TrimSpace(input.Description)
 

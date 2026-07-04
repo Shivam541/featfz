@@ -6,9 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"gorm.io/gorm"
+
 	"github.com/shivam/featfz/feat-manager/internal/domain"
+	"github.com/shivam/featfz/feat-manager/internal/entity"
 	"github.com/shivam/featfz/feat-manager/internal/service"
 )
 
@@ -26,18 +30,19 @@ func (r *FlagRepository) Create(ctx context.Context, flag domain.Flag) (domain.F
 		return domain.Flag{}, fmt.Errorf("create flag: key is required")
 	}
 
-	var description any
-	if trimmed := strings.TrimSpace(flag.Description); trimmed != "" {
-		description = trimmed
+	description := strings.TrimSpace(flag.Description)
+	gormDB, err := openGormDB(r.db)
+	if err != nil {
+		return domain.Flag{}, fmt.Errorf("open gorm db: %w", err)
 	}
 
-	const query = `
-INSERT INTO flags (tenant_id, ` + "`key`" + `, description, default_enabled)
-VALUES (?, ?, ?, ?)
-`
-
-	result, err := r.db.ExecContext(ctx, query, flag.TenantID, flag.Key, description, flag.DefaultEnabled)
-	if err != nil {
+	record := entity.Flag{
+		TenantID:       flag.TenantID,
+		Key:            flag.Key,
+		Description:    description,
+		DefaultEnabled: flag.DefaultEnabled,
+	}
+	if err := gormDB.WithContext(ctx).Create(&record).Error; err != nil {
 		var mysqlErr *mysql.MySQLError
 		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
 			return domain.Flag{}, service.ErrFlagAlreadyExists
@@ -46,12 +51,7 @@ VALUES (?, ?, ?, ?)
 		return domain.Flag{}, fmt.Errorf("insert flag: %w", err)
 	}
 
-	id, err := result.LastInsertId()
-	if err != nil {
-		return domain.Flag{}, fmt.Errorf("last insert flag id: %w", err)
-	}
-
-	return r.findByID(ctx, id)
+	return toDomainFlag(record), nil
 }
 
 func (r *FlagRepository) FindByKey(ctx context.Context, tenantID int64, key string) (domain.Flag, error) {
@@ -60,40 +60,43 @@ func (r *FlagRepository) FindByKey(ctx context.Context, tenantID int64, key stri
 		return domain.Flag{}, service.ErrFlagNotFound
 	}
 
-	const query = `
-SELECT id, tenant_id, ` + "`key`" + `, description, default_enabled, archived_at, created_at, updated_at
-FROM flags
-WHERE tenant_id = ? AND ` + "`key`" + ` = ? AND archived_at IS NULL
-LIMIT 1
-`
+	gormDB, err := openGormDB(r.db)
+	if err != nil {
+		return domain.Flag{}, fmt.Errorf("open gorm db: %w", err)
+	}
 
-	return r.scanFlag(r.db.QueryRowContext(ctx, query, tenantID, key))
+	var record entity.Flag
+	err = gormDB.WithContext(ctx).
+		Where("tenant_id = ? AND `key` = ? AND archived_at IS NULL", tenantID, key).
+		First(&record).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.Flag{}, service.ErrFlagNotFound
+		}
+
+		return domain.Flag{}, fmt.Errorf("find flag by key: %w", err)
+	}
+
+	return toDomainFlag(record), nil
 }
 
 func (r *FlagRepository) ListActive(ctx context.Context, tenantID int64) ([]domain.Flag, error) {
-	const query = `
-SELECT id, tenant_id, ` + "`key`" + `, description, default_enabled, archived_at, created_at, updated_at
-FROM flags
-WHERE tenant_id = ? AND archived_at IS NULL
-ORDER BY id ASC
-`
-
-	rows, err := r.db.QueryContext(ctx, query, tenantID)
+	gormDB, err := openGormDB(r.db)
 	if err != nil {
-		return nil, fmt.Errorf("list active flags: %w", err)
+		return nil, fmt.Errorf("open gorm db: %w", err)
 	}
-	defer rows.Close()
 
-	flags := make([]domain.Flag, 0)
-	for rows.Next() {
-		flag, err := scanFlagRow(rows)
-		if err != nil {
-			return nil, err
-		}
-		flags = append(flags, flag)
-	}
-	if err := rows.Err(); err != nil {
+	var records []entity.Flag
+	if err := gormDB.WithContext(ctx).
+		Where("tenant_id = ? AND archived_at IS NULL", tenantID).
+		Order("id ASC").
+		Find(&records).Error; err != nil {
 		return nil, fmt.Errorf("list active flags: %w", err)
+	}
+
+	flags := make([]domain.Flag, 0, len(records))
+	for _, record := range records {
+		flags = append(flags, toDomainFlag(record))
 	}
 
 	return flags, nil
@@ -105,27 +108,24 @@ func (r *FlagRepository) Update(ctx context.Context, flag domain.Flag) (domain.F
 		return domain.Flag{}, service.ErrFlagNotFound
 	}
 
-	var description any
-	if trimmed := strings.TrimSpace(flag.Description); trimmed != "" {
-		description = trimmed
-	}
-
-	const query = `
-UPDATE flags
-SET description = ?, default_enabled = ?
-WHERE tenant_id = ? AND ` + "`key`" + ` = ? AND archived_at IS NULL
-`
-
-	result, err := r.db.ExecContext(ctx, query, description, flag.DefaultEnabled, flag.TenantID, flag.Key)
+	description := strings.TrimSpace(flag.Description)
+	gormDB, err := openGormDB(r.db)
 	if err != nil {
-		return domain.Flag{}, fmt.Errorf("update flag: %w", err)
+		return domain.Flag{}, fmt.Errorf("open gorm db: %w", err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return domain.Flag{}, fmt.Errorf("rows affected updating flag: %w", err)
+	result := gormDB.WithContext(ctx).
+		Model(&entity.Flag{}).
+		Where("tenant_id = ? AND `key` = ? AND archived_at IS NULL", flag.TenantID, flag.Key).
+		Updates(map[string]any{
+			"description":     description,
+			"default_enabled": flag.DefaultEnabled,
+			"updated_at":      time.Now().UTC(),
+		})
+	if result.Error != nil {
+		return domain.Flag{}, fmt.Errorf("update flag: %w", result.Error)
 	}
-	if rowsAffected == 0 {
+	if result.RowsAffected == 0 {
 		return domain.Flag{}, service.ErrFlagNotFound
 	}
 
@@ -138,85 +138,44 @@ func (r *FlagRepository) Archive(ctx context.Context, tenantID int64, key string
 		return service.ErrFlagNotFound
 	}
 
-	const query = `
-UPDATE flags
-SET archived_at = CURRENT_TIMESTAMP
-WHERE tenant_id = ? AND ` + "`key`" + ` = ? AND archived_at IS NULL
-`
-
-	result, err := r.db.ExecContext(ctx, query, tenantID, key)
+	gormDB, err := openGormDB(r.db)
 	if err != nil {
-		return fmt.Errorf("archive flag: %w", err)
+		return fmt.Errorf("open gorm db: %w", err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("rows affected archiving flag: %w", err)
+	now := time.Now().UTC()
+	result := gormDB.WithContext(ctx).
+		Model(&entity.Flag{}).
+		Where("tenant_id = ? AND `key` = ? AND archived_at IS NULL", tenantID, key).
+		Updates(map[string]any{
+			"archived_at": now,
+			"updated_at":  now,
+		})
+	if result.Error != nil {
+		return fmt.Errorf("archive flag: %w", result.Error)
 	}
-	if rowsAffected == 0 {
+	if result.RowsAffected == 0 {
 		return service.ErrFlagNotFound
 	}
 
 	return nil
 }
 
-func (r *FlagRepository) findByID(ctx context.Context, id int64) (domain.Flag, error) {
-	const query = `
-SELECT id, tenant_id, ` + "`key`" + `, description, default_enabled, archived_at, created_at, updated_at
-FROM flags
-WHERE id = ?
-LIMIT 1
-`
-
-	return r.scanFlag(r.db.QueryRowContext(ctx, query, id))
-}
-
-func (r *FlagRepository) scanFlag(row rowScanner) (domain.Flag, error) {
-	flag, err := scanFlagRow(row)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return domain.Flag{}, service.ErrFlagNotFound
-		}
-
-		return domain.Flag{}, err
+func toDomainFlag(record entity.Flag) domain.Flag {
+	flag := domain.Flag{
+		ID:             record.ID,
+		TenantID:       record.TenantID,
+		Key:            record.Key,
+		Description:    record.Description,
+		DefaultEnabled: record.DefaultEnabled,
+		CreatedAt:      record.CreatedAt.UTC(),
+		UpdatedAt:      record.UpdatedAt.UTC(),
 	}
 
-	return flag, nil
-}
-
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
-func scanFlagRow(row rowScanner) (domain.Flag, error) {
-	var flag domain.Flag
-	var description sql.NullString
-	var archivedAt sql.NullTime
-
-	err := row.Scan(
-		&flag.ID,
-		&flag.TenantID,
-		&flag.Key,
-		&description,
-		&flag.DefaultEnabled,
-		&archivedAt,
-		&flag.CreatedAt,
-		&flag.UpdatedAt,
-	)
-	if err != nil {
-		return domain.Flag{}, err
+	if record.ArchivedAt != nil {
+		archivedAt := record.ArchivedAt.UTC()
+		flag.ArchivedAt = &archivedAt
 	}
 
-	if description.Valid {
-		flag.Description = description.String
-	}
-	if archivedAt.Valid {
-		archived := archivedAt.Time.UTC()
-		flag.ArchivedAt = &archived
-	}
-
-	flag.CreatedAt = flag.CreatedAt.UTC()
-	flag.UpdatedAt = flag.UpdatedAt.UTC()
-
-	return flag, nil
+	return flag
 }

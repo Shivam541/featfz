@@ -8,7 +8,9 @@ import (
 	"strings"
 
 	"github.com/shivam/featfz/feat-manager/internal/domain"
+	"github.com/shivam/featfz/feat-manager/internal/entity"
 	"github.com/shivam/featfz/feat-manager/internal/service"
+	"gorm.io/gorm"
 )
 
 type TenantAppRepository struct {
@@ -25,27 +27,25 @@ func (r *TenantAppRepository) FindByAppID(ctx context.Context, appID string) (do
 		return domain.TenantApp{}, service.ErrTenantAppNotFound
 	}
 
-	const query = `
-SELECT id, name, app_id, jwt_secret
-FROM tenants
-WHERE app_id = ?
-LIMIT 1
-`
-
-	var tenantApp domain.TenantApp
-	err := r.db.QueryRowContext(ctx, query, appID).Scan(
-		&tenantApp.TenantID,
-		&tenantApp.TenantName,
-		&tenantApp.AppID,
-		&tenantApp.JWTSecret,
-	)
+	gormDB, err := openGormDB(r.db)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		return domain.TenantApp{}, fmt.Errorf("open gorm db: %w", err)
+	}
+
+	var tenant entity.Tenant
+	err = gormDB.WithContext(ctx).Where("app_id = ?", appID).First(&tenant).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return domain.TenantApp{}, service.ErrTenantAppNotFound
 		}
 
 		return domain.TenantApp{}, fmt.Errorf("query tenant app by app id: %w", err)
 	}
 
-	return tenantApp, nil
+	return domain.TenantApp{
+		TenantID:   tenant.ID,
+		TenantName: tenant.Name,
+		AppID:      tenant.AppID,
+		JWTSecret:  tenant.JWTSecret,
+	}, nil
 }

@@ -17,6 +17,8 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 
 	"github.com/shivam/featfz/feat-manager/internal/dao"
+	"github.com/shivam/featfz/feat-manager/internal/http/controller"
+	"github.com/shivam/featfz/feat-manager/internal/http/validation"
 	"github.com/shivam/featfz/feat-manager/internal/service"
 )
 
@@ -35,7 +37,7 @@ func TestCreateFlagRouteIntegration(t *testing.T) {
 			TokenVerifier: service.HS256JWTVerifier{},
 			Now:           func() time.Time { return now },
 		},
-		FlagCreator: service.NewFlagCreationService(dao.NewFlagRepository(db)),
+		FlagController: controller.NewFlagController(service.NewFlagService(dao.NewFlagRepository(db)), validation.NewValidator()),
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/flags", strings.NewReader(`{

@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/shivam/featfz/feat-manager/internal/domain"
+	"github.com/shivam/featfz/feat-manager/internal/http/controller"
+	"github.com/shivam/featfz/feat-manager/internal/http/validation"
 	"github.com/shivam/featfz/feat-manager/internal/service"
 )
 
@@ -44,7 +46,7 @@ func TestNewRouter(t *testing.T) {
 			TokenVerifier: service.HS256JWTVerifier{},
 			Now:           func() time.Time { return time.Unix(1_720_000_000, 0).UTC() },
 		},
-		FlagCreator: routerFlagCreator{},
+		FlagController: controller.NewFlagController(routerFlagCreator{}, validation.NewValidator()),
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -79,7 +81,7 @@ func TestNewRouterProtectedRoute(t *testing.T) {
 			TokenVerifier: service.HS256JWTVerifier{},
 			Now:           func() time.Time { return now },
 		},
-		FlagCreator: routerFlagCreator{},
+		FlagController: controller.NewFlagController(routerFlagCreator{}, validation.NewValidator()),
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/auth/check", nil)
@@ -116,7 +118,7 @@ func TestNewRouterCreateFlagRoute(t *testing.T) {
 			TokenVerifier: service.HS256JWTVerifier{},
 			Now:           func() time.Time { return now },
 		},
-		FlagCreator: routerFlagCreator{},
+		FlagController: controller.NewFlagController(routerFlagCreator{}, validation.NewValidator()),
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/flags", bytes.NewBufferString(`{"key":"new_dashboard","default_enabled":true}`))

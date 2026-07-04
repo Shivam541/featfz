@@ -1,4 +1,4 @@
-package handlers
+package controller
 
 import (
 	"bytes"
@@ -12,10 +12,11 @@ import (
 
 	"github.com/shivam/featfz/feat-manager/internal/domain"
 	"github.com/shivam/featfz/feat-manager/internal/http/requestctx"
+	"github.com/shivam/featfz/feat-manager/internal/http/validation"
 	"github.com/shivam/featfz/feat-manager/internal/service"
 )
 
-type createFlagCreatorStub struct {
+type stubFlagService struct {
 	called   bool
 	tenantID int64
 	input    service.CreateFlagInput
@@ -23,16 +24,16 @@ type createFlagCreatorStub struct {
 	err      error
 }
 
-func (s *createFlagCreatorStub) Create(_ context.Context, tenantID int64, input service.CreateFlagInput) (domain.Flag, error) {
+func (s *stubFlagService) Create(_ context.Context, tenantID int64, input service.CreateFlagInput) (domain.Flag, error) {
 	s.called = true
 	s.tenantID = tenantID
 	s.input = input
 	return s.result, s.err
 }
 
-func TestCreateFlagHandler(t *testing.T) {
+func TestCreateFlag(t *testing.T) {
 	now := time.Unix(1_720_000_000, 0).UTC()
-	creator := &createFlagCreatorStub{
+	flagService := &stubFlagService{
 		result: domain.Flag{
 			ID:             9,
 			TenantID:       7,
@@ -57,24 +58,24 @@ func TestCreateFlagHandler(t *testing.T) {
 	}))
 	rec := httptest.NewRecorder()
 
-	NewCreateFlag(creator).ServeHTTP(rec, req)
+	NewFlagController(flagService, validation.NewValidator()).CreateFlag(rec, req)
 
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d", rec.Code)
 	}
-	if !creator.called {
-		t.Fatal("expected flag creator to be called")
+	if !flagService.called {
+		t.Fatal("expected flag service to be called")
 	}
-	if creator.tenantID != 7 {
-		t.Fatalf("expected tenant id 7, got %d", creator.tenantID)
+	if flagService.tenantID != 7 {
+		t.Fatalf("expected tenant id 7, got %d", flagService.tenantID)
 	}
-	if creator.input.Key != "new_dashboard" {
-		t.Fatalf("expected trimmed key, got %q", creator.input.Key)
+	if flagService.input.Key != "new_dashboard" {
+		t.Fatalf("expected trimmed key, got %q", flagService.input.Key)
 	}
-	if creator.input.Description != "Enable the new dashboard experience" {
-		t.Fatalf("expected description to pass through, got %q", creator.input.Description)
+	if flagService.input.Description != "Enable the new dashboard experience" {
+		t.Fatalf("expected description to pass through, got %q", flagService.input.Description)
 	}
-	if creator.input.DefaultEnabled {
+	if flagService.input.DefaultEnabled {
 		t.Fatal("expected default_enabled=false")
 	}
 
@@ -99,7 +100,7 @@ func TestCreateFlagHandler(t *testing.T) {
 	}
 }
 
-func TestCreateFlagHandlerValidatesInput(t *testing.T) {
+func TestCreateFlagValidatesInput(t *testing.T) {
 	tests := []struct {
 		name       string
 		body       string
@@ -128,19 +129,19 @@ func TestCreateFlagHandlerValidatesInput(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			creator := &createFlagCreatorStub{}
+			flagService := &stubFlagService{}
 			req := httptest.NewRequest(http.MethodPost, "/v1/flags", bytes.NewBufferString(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			req = req.WithContext(requestctx.WithTenant(req.Context(), requestctx.Tenant{TenantID: 7}))
 			rec := httptest.NewRecorder()
 
-			NewCreateFlag(creator).ServeHTTP(rec, req)
+			NewFlagController(flagService, validation.NewValidator()).CreateFlag(rec, req)
 
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("expected status %d, got %d", tt.wantStatus, rec.Code)
 			}
-			if creator.called {
-				t.Fatal("expected creator not to be called on validation error")
+			if flagService.called {
+				t.Fatal("expected service not to be called on validation error")
 			}
 
 			var body struct {
@@ -162,12 +163,12 @@ func TestCreateFlagHandlerValidatesInput(t *testing.T) {
 	}
 }
 
-func TestCreateFlagHandlerRequiresTenantContext(t *testing.T) {
+func TestCreateFlagRequiresTenantContext(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/v1/flags", bytes.NewBufferString(`{"key":"new_dashboard","default_enabled":true}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
-	NewCreateFlag(&createFlagCreatorStub{}).ServeHTTP(rec, req)
+	NewFlagController(&stubFlagService{}, validation.NewValidator()).CreateFlag(rec, req)
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", rec.Code)
