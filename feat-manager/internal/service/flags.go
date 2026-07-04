@@ -23,11 +23,12 @@ type UpdateFlagInput struct {
 }
 
 type FlagService struct {
-	Flags FlagRepository
+	Flags     FlagRepository
+	Overrides FlagOverrideRepository
 }
 
-func NewFlagService(repo FlagRepository) FlagService {
-	return FlagService{Flags: repo}
+func NewFlagService(repo FlagRepository, overrideRepo FlagOverrideRepository) FlagService {
+	return FlagService{Flags: repo, Overrides: overrideRepo}
 }
 
 func (s FlagService) Create(ctx context.Context, tenantID int64, input CreateFlagInput) (domain.Flag, error) {
@@ -92,4 +93,39 @@ func (s FlagService) Archive(ctx context.Context, tenantID int64, key string) er
 	}
 
 	return nil
+}
+
+func (s FlagService) BulkSetOverrides(ctx context.Context, tenantID int64, key string, overrides []FlagUserOverrideInput) (int, error) {
+	flag, err := s.Flags.FindByKey(ctx, tenantID, key)
+	if err != nil {
+		return 0, fmt.Errorf("get flag before bulk set overrides: %w", err)
+	}
+
+	if len(overrides) == 0 {
+		return 0, nil
+	}
+
+	deduped := make(map[string]domain.FlagUserOverride, len(overrides))
+	for _, override := range overrides {
+		userID := strings.TrimSpace(override.UserID)
+		if userID == "" {
+			return 0, fmt.Errorf("bulk set flag overrides: user id is required")
+		}
+
+		deduped[userID] = domain.FlagUserOverride{
+			UserID:  userID,
+			Enabled: override.Enabled,
+		}
+	}
+
+	records := make([]domain.FlagUserOverride, 0, len(deduped))
+	for _, override := range deduped {
+		records = append(records, override)
+	}
+
+	if err := s.Overrides.BulkUpsert(ctx, tenantID, flag.ID, records); err != nil {
+		return 0, fmt.Errorf("bulk set flag overrides: %w", err)
+	}
+
+	return len(records), nil
 }

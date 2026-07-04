@@ -37,7 +37,7 @@ func TestCreateFlagRouteIntegration(t *testing.T) {
 			TokenVerifier: service.HS256JWTVerifier{},
 			Now:           func() time.Time { return now },
 		},
-		FlagController: controller.NewFlagController(service.NewFlagService(dao.NewFlagRepository(db)), validation.NewValidator()),
+		FlagController: controller.NewFlagController(service.NewFlagService(dao.NewFlagRepository(db), dao.NewFlagOverrideRepository(db)), validation.NewValidator()),
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/flags", strings.NewReader(`{
@@ -103,7 +103,7 @@ func TestFlagCrudRoutesIntegration(t *testing.T) {
 			TokenVerifier: service.HS256JWTVerifier{},
 			Now:           func() time.Time { return now },
 		},
-		FlagController: controller.NewFlagController(service.NewFlagService(dao.NewFlagRepository(db)), validation.NewValidator()),
+		FlagController: controller.NewFlagController(service.NewFlagService(dao.NewFlagRepository(db), dao.NewFlagOverrideRepository(db)), validation.NewValidator()),
 	})
 
 	createReq := httptest.NewRequest(http.MethodPost, "/v1/flags", strings.NewReader(`{
@@ -203,6 +203,93 @@ func TestFlagCrudRoutesIntegration(t *testing.T) {
 	}
 	if remaining != 0 {
 		t.Fatalf("expected no active flags remaining, got %d", remaining)
+	}
+}
+
+func TestBulkSetOverridesRouteIntegration(t *testing.T) {
+	db := openRouterIntegrationDB(t)
+	resetRouterIntegrationTables(t, db)
+	ctx := context.Background()
+
+	tenantID := insertRouterIntegrationTenant(t, db, "acme", "app-acme", "acme-secret")
+	now := time.Unix(1_720_000_000, 0).UTC()
+
+	router := NewRouter(RouterDependencies{
+		HealthChecker: service.StaticHealthChecker{},
+		Authenticator: service.AuthenticationService{
+			TenantApps:    dao.NewTenantAppRepository(db),
+			TokenVerifier: service.HS256JWTVerifier{},
+			Now:           func() time.Time { return now },
+		},
+		FlagController: controller.NewFlagController(service.NewFlagService(dao.NewFlagRepository(db), dao.NewFlagOverrideRepository(db)), validation.NewValidator()),
+	})
+
+	createReq := httptest.NewRequest(http.MethodPost, "/v1/flags", strings.NewReader(`{
+		"key": "new_dashboard",
+		"description": "Enable the new dashboard experience",
+		"default_enabled": false
+	}`))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("X-App-ID", "app-acme")
+	createReq.Header.Set("Authorization", "Bearer "+testRouterJWT(t, "acme-secret", map[string]any{
+		"app_id": "app-acme",
+		"sub":    "user-123",
+		"exp":    now.Add(time.Hour).Unix(),
+	}))
+	createRec := httptest.NewRecorder()
+	router.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected create 201, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+
+	bulkReq := httptest.NewRequest(http.MethodPost, "/v1/flags/new_dashboard/users/bulk-set", strings.NewReader(`{
+		"overrides": [
+			{"user_id":" user_123 ","enabled":true},
+			{"user_id":"user_456","enabled":false},
+			{"user_id":"user_123","enabled":false}
+		]
+	}`))
+	bulkReq.Header.Set("Content-Type", "application/json")
+	bulkReq.SetPathValue("flagKey", "new_dashboard")
+	bulkReq.Header.Set("X-App-ID", "app-acme")
+	bulkReq.Header.Set("Authorization", "Bearer "+testRouterJWT(t, "acme-secret", map[string]any{
+		"app_id": "app-acme",
+		"sub":    "user-123",
+		"exp":    now.Add(time.Hour).Unix(),
+	}))
+	bulkRec := httptest.NewRecorder()
+	router.ServeHTTP(bulkRec, bulkReq)
+	if bulkRec.Code != http.StatusOK {
+		t.Fatalf("expected bulk set 200, got %d: %s", bulkRec.Code, bulkRec.Body.String())
+	}
+
+	var body struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Applied int `json:"applied"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(bulkRec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected valid json body, got %v", err)
+	}
+	if !body.Success || body.Data.Applied != 2 {
+		t.Fatalf("unexpected bulk set response: %+v", body)
+	}
+
+	var count int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM flag_user_overrides WHERE tenant_id = ? AND flag_id = (SELECT id FROM flags WHERE tenant_id = ? AND `+"`key`"+` = ?)`, tenantID, tenantID, "new_dashboard").Scan(&count); err != nil {
+		t.Fatalf("count overrides: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("expected 2 override rows, got %d", count)
+	}
+
+	var enabled bool
+	if err := db.QueryRowContext(ctx, `SELECT enabled FROM flag_user_overrides WHERE tenant_id = ? AND user_id = ?`, tenantID, "user_123").Scan(&enabled); err != nil {
+		t.Fatalf("fetch override: %v", err)
+	}
+	if enabled {
+		t.Fatal("expected last user_123 override to be disabled")
 	}
 }
 

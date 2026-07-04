@@ -247,7 +247,7 @@ Reasoning:
 
 ### Bulk Set Per-User Overrides for a Flag
 
-`POST /v1/flags/{flagKey}/users:bulk-set`
+`POST /v1/flags/{flagKey}/users/bulk-set`
 
 Request body:
 
@@ -327,7 +327,7 @@ curl -X POST http://localhost:8080/v1/flags \
 ### Bulk set per-user overrides
 
 ```bash
-curl -X POST http://localhost:8080/v1/flags/new_dashboard/users:bulk-set \
+curl -X POST http://localhost:8080/v1/flags/new_dashboard/users/bulk-set \
   -H "Authorization: Bearer $TENANT_JWT" \
   -H "X-App-ID: $APP_ID" \
   -H "Content-Type: application/json" \
@@ -474,7 +474,7 @@ Expected responses:
 
 ### Bulk Set Per-User Overrides for a Flag
 
-`POST /v1/flags/{flagKey}/users:bulk-set`
+`POST /v1/flags/{flagKey}/users/bulk-set`
 
 Expected responses:
 

@@ -58,9 +58,19 @@ type FlagManager interface {
 	FlagGetter
 	FlagUpdater
 	FlagArchiver
+	FlagOverrideBulkSetter
 }
 
 type FlagOverrideRepository interface {
 	BulkUpsert(context.Context, int64, int64, []domain.FlagUserOverride) error
 	FindByUser(context.Context, int64, int64, string) (domain.FlagUserOverride, error)
+}
+
+type FlagOverrideBulkSetter interface {
+	BulkSetOverrides(context.Context, int64, string, []FlagUserOverrideInput) (int, error)
+}
+
+type FlagUserOverrideInput struct {
+	UserID  string
+	Enabled bool
 }

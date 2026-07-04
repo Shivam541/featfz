@@ -138,6 +138,45 @@ func TestNewRouterCreateFlagRoute(t *testing.T) {
 	}
 }
 
+func TestNewRouterBulkSetOverridesRoute(t *testing.T) {
+	now := time.Unix(1_720_000_000, 0).UTC()
+	router := NewRouter(RouterDependencies{
+		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		HealthChecker: stubHealthChecker{status: "ok"},
+		Authenticator: service.AuthenticationService{
+			TenantApps: routerTenantApps{
+				records: map[string]domain.TenantApp{
+					"app-acme": {
+						TenantID:  21,
+						AppID:     "app-acme",
+						JWTSecret: "phase2-secret",
+					},
+				},
+			},
+			TokenVerifier: service.HS256JWTVerifier{},
+			Now:           func() time.Time { return now },
+		},
+		FlagController: controller.NewFlagController(routerFlagCreator{}, validation.NewValidator()),
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/flags/new_dashboard/users/bulk-set", bytes.NewBufferString(`{"overrides":[{"user_id":"user_123","enabled":true}]}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("flagKey", "new_dashboard")
+	req.Header.Set("X-App-ID", "app-acme")
+	req.Header.Set("Authorization", "Bearer "+routerJWT(t, "phase2-secret", map[string]any{
+		"app_id": "app-acme",
+		"sub":    "user-123",
+		"exp":    now.Add(time.Hour).Unix(),
+	}))
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
 type routerTenantApps struct {
 	records map[string]domain.TenantApp
 }
@@ -219,4 +258,8 @@ func (routerFlagCreator) Update(context.Context, int64, string, service.UpdateFl
 
 func (routerFlagCreator) Archive(context.Context, int64, string) error {
 	return nil
+}
+
+func (routerFlagCreator) BulkSetOverrides(context.Context, int64, string, []service.FlagUserOverrideInput) (int, error) {
+	return 1, nil
 }

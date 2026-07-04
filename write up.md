@@ -445,3 +445,54 @@ The user clarified that token creation already exists in the client folder and a
 Resulting direction:
 
 `feat-manager/README.md` now points the curl examples at `feat-client/scripts/generate-jwt.mjs` and shows `TOKEN=$(node ../feat-client/scripts/generate-jwt.mjs)` as the supported way to build a JWT for the backend requests.
+
+## Entry
+
+### 2026-07-05 01:13:40 IST
+
+Prompt summary:
+
+The user asked to start phase 6.
+
+Decision points:
+
+- Whether phase 6 should stay focused only on the bulk per-user override write flow.
+- How to keep request validation strict while still allowing duplicate `user_id` entries with last-value-wins deduping.
+- Whether the new flow should be added as a separate service path or folded into the existing grouped flag service.
+
+AI recommendation:
+
+The recommendation was to keep phase 6 narrow and build only the bulk override write slice. I extended the grouped `FlagService` with a tenant-scoped `BulkSetOverrides` method, added the authenticated `POST /v1/flags/{flagKey}/users:bulk-set` route, normalized and deduped override entries in the controller, and kept the DAO layer as the tenant-scoped upsert boundary. I also added controller, service, router, and integration tests to confirm mixed booleans, duplicate `user_id` handling, and invalid input validation.
+
+User response:
+
+The user asked to start with phase 6 after finishing the phase 5 push.
+
+Resulting direction:
+
+Phase 6 is now implemented in `feat-manager` with bulk per-user override writes, request deduplication, tenant-scoped upserts, and passing `go test ./...` coverage. The backend README now documents the new route and curl example so the next phase can move on to evaluation with the bulk override API in place.
+
+## Entry
+
+### 2026-07-05 01:22:11 IST
+
+Prompt summary:
+
+The user asked to make the bulk-set route more conventional REST-like by removing the colon form.
+
+Decision points:
+
+- Whether to keep the existing custom action syntax or switch the route to a nested subresource path.
+- Which exact conventional path to use so the code, docs, and tech spec stay aligned.
+
+AI recommendation:
+
+The recommendation was to switch the route to `/v1/flags/{flagKey}/users/bulk-set`. That keeps the bulk action grouped under the `users` subresource while avoiding the colon-style action syntax. I updated the router, controller tests, integration tests, README examples, and the tech spec references to the nested path.
+
+User response:
+
+The user asked to make the route more conventional REST-like.
+
+Resulting direction:
+
+The bulk override route now uses `/v1/flags/{flagKey}/users/bulk-set` everywhere, and the docs reflect that shape instead of the earlier `users:bulk-set` form.

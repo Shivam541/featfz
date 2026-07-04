@@ -17,6 +17,10 @@ type stubFlagRepository struct {
 	archiveFn func(context.Context, int64, string) error
 }
 
+type stubFlagOverrideRepository struct {
+	bulkUpsertFn func(context.Context, int64, int64, []domain.FlagUserOverride) error
+}
+
 func (s stubFlagRepository) Create(ctx context.Context, flag domain.Flag) (domain.Flag, error) {
 	if s.createFn != nil {
 		return s.createFn(ctx, flag)
@@ -50,6 +54,17 @@ func (s stubFlagRepository) Archive(ctx context.Context, tenantID int64, key str
 		return s.archiveFn(ctx, tenantID, key)
 	}
 	return nil
+}
+
+func (s stubFlagOverrideRepository) BulkUpsert(ctx context.Context, tenantID int64, flagID int64, overrides []domain.FlagUserOverride) error {
+	if s.bulkUpsertFn != nil {
+		return s.bulkUpsertFn(ctx, tenantID, flagID, overrides)
+	}
+	return nil
+}
+
+func (s stubFlagOverrideRepository) FindByUser(context.Context, int64, int64, string) (domain.FlagUserOverride, error) {
+	return domain.FlagUserOverride{}, ErrFlagOverrideNotFound
 }
 
 func TestFlagServiceCRUD(t *testing.T) {
@@ -88,7 +103,7 @@ func TestFlagServiceCRUD(t *testing.T) {
 		},
 	}
 
-	service := NewFlagService(repo)
+	service := NewFlagService(repo, stubFlagOverrideRepository{})
 
 	created, err := service.Create(context.Background(), 7, CreateFlagInput{
 		Key:            " new_dashboard ",
@@ -151,7 +166,7 @@ func TestFlagServiceSurfacesRepositoryErrors(t *testing.T) {
 		archiveFn: func(context.Context, int64, string) error {
 			return repoErr
 		},
-	})
+	}, stubFlagOverrideRepository{})
 
 	if _, err := service.List(context.Background(), 7); err == nil || !errors.Is(err, repoErr) {
 		t.Fatalf("expected wrapped list error, got %v", err)
@@ -164,5 +179,85 @@ func TestFlagServiceSurfacesRepositoryErrors(t *testing.T) {
 	}
 	if err := service.Archive(context.Background(), 7, "new_dashboard"); err == nil || !errors.Is(err, repoErr) {
 		t.Fatalf("expected wrapped archive error, got %v", err)
+	}
+}
+
+func TestFlagServiceBulkSetOverrides(t *testing.T) {
+	seen := make([]domain.FlagUserOverride, 0)
+	repo := stubFlagRepository{
+		findFn: func(_ context.Context, tenantID int64, key string) (domain.Flag, error) {
+			if tenantID != 7 || key != "new_dashboard" {
+				t.Fatalf("unexpected flag lookup: tenant=%d key=%q", tenantID, key)
+			}
+
+			return domain.Flag{
+				ID:       42,
+				TenantID: tenantID,
+				Key:      key,
+			}, nil
+		},
+	}
+	overrideRepo := stubFlagOverrideRepository{
+		bulkUpsertFn: func(_ context.Context, tenantID int64, flagID int64, overrides []domain.FlagUserOverride) error {
+			if tenantID != 7 || flagID != 42 {
+				t.Fatalf("unexpected ownership: tenant=%d flag=%d", tenantID, flagID)
+			}
+
+			seen = append(seen, overrides...)
+			return nil
+		},
+	}
+
+	service := NewFlagService(repo, overrideRepo)
+	enabled := true
+	disabled := false
+
+	applied, err := service.BulkSetOverrides(context.Background(), 7, "new_dashboard", []FlagUserOverrideInput{
+		{UserID: " user_123 ", Enabled: enabled},
+		{UserID: "user_456", Enabled: disabled},
+		{UserID: "user_123", Enabled: disabled},
+	})
+	if err != nil {
+		t.Fatalf("bulk set overrides: %v", err)
+	}
+	if applied != 2 {
+		t.Fatalf("expected 2 applied overrides, got %d", applied)
+	}
+
+	if len(seen) != 2 {
+		t.Fatalf("expected 2 deduped overrides, got %d", len(seen))
+	}
+
+	got := map[string]bool{}
+	for _, override := range seen {
+		got[override.UserID] = override.Enabled
+	}
+
+	if got["user_123"] {
+		t.Fatal("expected last user_123 value to win and be false")
+	}
+	if got["user_456"] {
+		t.Fatal("expected user_456 to remain false")
+	}
+}
+
+func TestFlagServiceBulkSetOverridesRejectsInvalidUser(t *testing.T) {
+	service := NewFlagService(stubFlagRepository{
+		findFn: func(context.Context, int64, string) (domain.Flag, error) {
+			return domain.Flag{ID: 42, TenantID: 7, Key: "new_dashboard"}, nil
+		},
+	}, stubFlagOverrideRepository{
+		bulkUpsertFn: func(context.Context, int64, int64, []domain.FlagUserOverride) error {
+			t.Fatal("expected bulk upsert not to be called")
+			return nil
+		},
+	})
+
+	applied, err := service.BulkSetOverrides(context.Background(), 7, "new_dashboard", []FlagUserOverrideInput{{UserID: "   ", Enabled: true}})
+	if err == nil {
+		t.Fatal("expected invalid user error")
+	}
+	if applied != 0 {
+		t.Fatalf("expected no applied overrides on error, got %d", applied)
 	}
 }

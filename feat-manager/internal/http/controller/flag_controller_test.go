@@ -22,10 +22,12 @@ type stubFlagManager struct {
 	getCalled     bool
 	updateCalled  bool
 	archiveCalled bool
+	bulkCalled    bool
 	tenantID      int64
 	key           string
 	createInput   service.CreateFlagInput
 	updateInput   service.UpdateFlagInput
+	bulkInput     []service.FlagUserOverrideInput
 	createdResult domain.Flag
 	listResult    []domain.Flag
 	getResult     domain.Flag
@@ -35,6 +37,7 @@ type stubFlagManager struct {
 	getErr        error
 	updateErr     error
 	archiveErr    error
+	bulkErr       error
 }
 
 func (s *stubFlagManager) Create(_ context.Context, tenantID int64, input service.CreateFlagInput) (domain.Flag, error) {
@@ -70,6 +73,14 @@ func (s *stubFlagManager) Archive(_ context.Context, tenantID int64, key string)
 	s.tenantID = tenantID
 	s.key = key
 	return s.archiveErr
+}
+
+func (s *stubFlagManager) BulkSetOverrides(_ context.Context, tenantID int64, key string, input []service.FlagUserOverrideInput) (int, error) {
+	s.bulkCalled = true
+	s.tenantID = tenantID
+	s.key = key
+	s.bulkInput = input
+	return len(input), s.bulkErr
 }
 
 func TestCreateFlag(t *testing.T) {
@@ -356,6 +367,121 @@ func TestUpdateFlagRequiresChanges(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestBulkSetOverrides(t *testing.T) {
+	flagService := &stubFlagManager{}
+	req := httptest.NewRequest(http.MethodPost, "/v1/flags/new_dashboard/users/bulk-set", bytes.NewBufferString(`{
+		"overrides": [
+			{"user_id":" user_123 ","enabled":true},
+			{"user_id":"user_456","enabled":false},
+			{"user_id":"user_123","enabled":false}
+		]
+	}`))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(requestctx.WithTenant(req.Context(), requestctx.Tenant{TenantID: 7}))
+	req.SetPathValue("flagKey", "new_dashboard")
+	rec := httptest.NewRecorder()
+
+	NewFlagController(flagService, validation.NewValidator()).BulkSetOverrides(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if !flagService.bulkCalled {
+		t.Fatal("expected bulk set to be called")
+	}
+	if len(flagService.bulkInput) != 2 {
+		t.Fatalf("expected deduped overrides, got %d", len(flagService.bulkInput))
+	}
+
+	got := map[string]bool{}
+	for _, override := range flagService.bulkInput {
+		got[override.UserID] = override.Enabled
+	}
+	if got["user_123"] {
+		t.Fatal("expected last user_123 value to win and be false")
+	}
+	if got["user_456"] {
+		t.Fatal("expected user_456 to remain false")
+	}
+
+	var body struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Applied int `json:"applied"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected valid json body, got %v", err)
+	}
+	if !body.Success || body.Data.Applied != 2 {
+		t.Fatalf("unexpected response: %+v", body)
+	}
+}
+
+func TestBulkSetOverridesValidatesInput(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		wantStatus int
+		wantCode   string
+	}{
+		{
+			name:       "missing overrides",
+			body:       `{}`,
+			wantStatus: http.StatusUnprocessableEntity,
+			wantCode:   "validation_failed",
+		},
+		{
+			name:       "missing enabled",
+			body:       `{"overrides":[{"user_id":"user_123"}]}`,
+			wantStatus: http.StatusUnprocessableEntity,
+			wantCode:   "validation_failed",
+		},
+		{
+			name:       "blank user id",
+			body:       `{"overrides":[{"user_id":"   ","enabled":true}]}`,
+			wantStatus: http.StatusUnprocessableEntity,
+			wantCode:   "validation_failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stub := &stubFlagManager{}
+			req := httptest.NewRequest(http.MethodPost, "/v1/flags/new_dashboard/users/bulk-set", bytes.NewBufferString(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			req = req.WithContext(requestctx.WithTenant(req.Context(), requestctx.Tenant{TenantID: 7}))
+			req.SetPathValue("flagKey", "new_dashboard")
+			rec := httptest.NewRecorder()
+
+			NewFlagController(stub, validation.NewValidator()).BulkSetOverrides(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("expected status %d, got %d", tt.wantStatus, rec.Code)
+			}
+			if stub.bulkCalled {
+				t.Fatal("expected service not to be called on validation error")
+			}
+
+			var body struct {
+				Success bool `json:"success"`
+				Error   struct {
+					Code string `json:"code"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("expected valid error body, got %v", err)
+			}
+			if body.Success {
+				t.Fatal("expected success=false")
+			}
+			if body.Error.Code != tt.wantCode {
+				t.Fatalf("expected error code %q, got %q", tt.wantCode, body.Error.Code)
+			}
+		})
 	}
 }
 

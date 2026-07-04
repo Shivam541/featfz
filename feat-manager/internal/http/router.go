@@ -38,6 +38,7 @@ func NewRouter(dependencies RouterDependencies) http.Handler {
 		mux.Handle("GET /v1/flags/{flagKey}", middleware.RequireAuth(dependencies.Authenticator)(http.HandlerFunc(dependencies.FlagController.GetFlag)))
 		mux.Handle("PATCH /v1/flags/{flagKey}", middleware.RequireAuth(dependencies.Authenticator)(http.HandlerFunc(dependencies.FlagController.UpdateFlag)))
 		mux.Handle("DELETE /v1/flags/{flagKey}", middleware.RequireAuth(dependencies.Authenticator)(http.HandlerFunc(dependencies.FlagController.ArchiveFlag)))
+		mux.Handle("POST /v1/flags/{flagKey}/users/bulk-set", middleware.RequireAuth(dependencies.Authenticator)(http.HandlerFunc(dependencies.FlagController.BulkSetOverrides)))
 	}
 
 	return middleware.Chain(mux,

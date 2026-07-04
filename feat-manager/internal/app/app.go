@@ -18,14 +18,15 @@ import (
 )
 
 type Dependencies struct {
-	OpenDB                 func(context.Context, config.Config) (*sql.DB, error)
-	Logger                 *slog.Logger
-	HealthChecker          service.HealthChecker
-	NewTenantAppRepository func(*sql.DB) service.TenantAppRepository
-	NewFlagRepository      func(*sql.DB) service.FlagRepository
-	NewAuthenticator       func(service.TenantAppRepository) service.Authenticator
-	NewFlagService         func(service.FlagRepository) service.FlagManager
-	NewFlagController      func(service.FlagManager) *controller.FlagController
+	OpenDB                    func(context.Context, config.Config) (*sql.DB, error)
+	Logger                    *slog.Logger
+	HealthChecker             service.HealthChecker
+	NewTenantAppRepository    func(*sql.DB) service.TenantAppRepository
+	NewFlagRepository         func(*sql.DB) service.FlagRepository
+	NewFlagOverrideRepository func(*sql.DB) service.FlagOverrideRepository
+	NewAuthenticator          func(service.TenantAppRepository) service.Authenticator
+	NewFlagService            func(service.FlagRepository, service.FlagOverrideRepository) service.FlagManager
+	NewFlagController         func(service.FlagManager) *controller.FlagController
 }
 
 type Runtime struct {
@@ -63,6 +64,13 @@ func New(ctx context.Context, cfg config.Config, dependencies Dependencies) (*Ru
 		}
 	}
 
+	newFlagOverrideRepository := dependencies.NewFlagOverrideRepository
+	if newFlagOverrideRepository == nil {
+		newFlagOverrideRepository = func(db *sql.DB) service.FlagOverrideRepository {
+			return dao.NewFlagOverrideRepository(db)
+		}
+	}
+
 	newAuthenticator := dependencies.NewAuthenticator
 	if newAuthenticator == nil {
 		newAuthenticator = func(repo service.TenantAppRepository) service.Authenticator {
@@ -73,8 +81,8 @@ func New(ctx context.Context, cfg config.Config, dependencies Dependencies) (*Ru
 
 	newFlagService := dependencies.NewFlagService
 	if newFlagService == nil {
-		newFlagService = func(repo service.FlagRepository) service.FlagManager {
-			return service.NewFlagService(repo)
+		newFlagService = func(repo service.FlagRepository, overrideRepo service.FlagOverrideRepository) service.FlagManager {
+			return service.NewFlagService(repo, overrideRepo)
 		}
 	}
 
@@ -92,8 +100,9 @@ func New(ctx context.Context, cfg config.Config, dependencies Dependencies) (*Ru
 
 	tenantAppRepository := newTenantAppRepository(db)
 	flagRepository := newFlagRepository(db)
+	flagOverrideRepository := newFlagOverrideRepository(db)
 	authenticator := newAuthenticator(tenantAppRepository)
-	flagService := newFlagService(flagRepository)
+	flagService := newFlagService(flagRepository, flagOverrideRepository)
 	flagController := newFlagController(flagService)
 
 	return &Runtime{

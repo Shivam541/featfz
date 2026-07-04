@@ -181,6 +181,39 @@ curl -X DELETE http://localhost:8080/v1/flags/new_dashboard \
   -H "X-App-ID: $APP_ID"
 ```
 
+## Phase 6 per-user override slice
+
+Phase 6 adds the bulk per-user override write flow for a flag.
+
+- Route:
+  - `POST /v1/flags/{flagKey}/users/bulk-set`
+- Behavior:
+  - repeated `user_id` entries in one request are deduped,
+  - last value wins when the same `user_id` appears more than once,
+  - writes stay tenant-scoped,
+  - invalid override entries return `422 Unprocessable Entity`.
+- Expected responses:
+  - `200 OK` when overrides are applied,
+  - `400 Bad Request` when the body is malformed,
+  - `404 Not Found` when the tenant flag does not exist,
+  - `422 Unprocessable Entity` for invalid override entries.
+
+Example curl:
+
+```bash
+curl -X POST http://localhost:8080/v1/flags/new_dashboard/users/bulk-set \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-App-ID: $APP_ID" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "overrides": [
+      {"user_id": "user_123", "enabled": true},
+      {"user_id": "user_456", "enabled": false},
+      {"user_id": "user_123", "enabled": false}
+    ]
+  }'
+```
+
 ## Test command
 
 ```bash

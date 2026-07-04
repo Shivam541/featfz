@@ -30,6 +30,15 @@ type UpdateFlagRequest struct {
 	DefaultEnabled *bool   `json:"default_enabled"`
 }
 
+type BulkSetOverridesRequest struct {
+	Overrides []BulkSetOverrideRequest `json:"overrides" validate:"required,min=1,dive"`
+}
+
+type BulkSetOverrideRequest struct {
+	UserID  string `json:"user_id" validate:"required,max=255"`
+	Enabled *bool  `json:"enabled" validate:"required"`
+}
+
 func NewFlagController(flagService service.FlagManager, validator *validator.Validate) *FlagController {
 	if validator == nil {
 		validator = validation.NewValidator()
@@ -206,6 +215,55 @@ func (c *FlagController) ArchiveFlag(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (c *FlagController) BulkSetOverrides(w http.ResponseWriter, r *http.Request) {
+	tenant, ok := requestctx.TenantFrom(r.Context())
+	if !ok {
+		response.WriteError(w, http.StatusInternalServerError, "tenant_context_missing", "Something went wrong.", nil)
+		return
+	}
+
+	key, detail := validation.RequiredPath(r, "flagKey")
+	if detail != nil {
+		response.WriteError(w, http.StatusBadRequest, "invalid_request", "The request is invalid.", []response.ErrorDetail{*detail})
+		return
+	}
+
+	var request BulkSetOverridesRequest
+	details := validation.DecodeJSONBody(r, &request)
+	if len(details) > 0 {
+		response.WriteError(w, http.StatusBadRequest, "invalid_request", "The request is invalid.", details)
+		return
+	}
+
+	normalizeBulkSetOverridesRequest(&request)
+
+	if err := c.Validator.Struct(request); err != nil {
+		details := validation.ValidationDetails(err)
+		response.WriteError(w, http.StatusUnprocessableEntity, "validation_failed", "The request could not be processed.", details)
+		return
+	}
+
+	inputs := dedupeBulkSetOverrideInputs(request.Overrides)
+
+	applied, err := c.Flags.BulkSetOverrides(r.Context(), tenant.TenantID, key, inputs)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrFlagNotFound):
+			response.WriteError(w, http.StatusNotFound, "flag_not_found", "The requested flag was not found.", nil)
+		default:
+			response.WriteError(w, http.StatusInternalServerError, "internal_error", "Something went wrong.", nil)
+		}
+		return
+	}
+
+	response.WriteJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"data": map[string]any{
+			"applied": applied,
+		},
+	})
+}
+
 func writeFlagData(w http.ResponseWriter, status int, flag domain.Flag) {
 	response.WriteJSON(w, status, map[string]any{
 		"success": true,
@@ -253,4 +311,41 @@ func hasValidationRequiredDetails(details []response.ErrorDetail) bool {
 	}
 
 	return false
+}
+
+func normalizeBulkSetOverridesRequest(request *BulkSetOverridesRequest) {
+	if request == nil {
+		return
+	}
+
+	for i := range request.Overrides {
+		request.Overrides[i].UserID = strings.TrimSpace(request.Overrides[i].UserID)
+	}
+}
+
+func dedupeBulkSetOverrideInputs(overrides []BulkSetOverrideRequest) []service.FlagUserOverrideInput {
+	if len(overrides) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]service.FlagUserOverrideInput, len(overrides))
+	order := make([]string, 0, len(overrides))
+
+	for _, override := range overrides {
+		input := service.FlagUserOverrideInput{
+			UserID:  override.UserID,
+			Enabled: *override.Enabled,
+		}
+		if _, ok := seen[input.UserID]; !ok {
+			order = append(order, input.UserID)
+		}
+		seen[input.UserID] = input
+	}
+
+	inputs := make([]service.FlagUserOverrideInput, 0, len(seen))
+	for _, userID := range order {
+		inputs = append(inputs, seen[userID])
+	}
+
+	return inputs
 }
