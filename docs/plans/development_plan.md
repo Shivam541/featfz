@@ -12,6 +12,8 @@ Design details should be referenced from the tech spec instead of repeated here.
 - Keep each phase small enough to ship and review on its own.
 - Follow TDD for backend code.
 - Prefer table-driven tests for service, handler, and validation logic.
+- Prefer GORM entities for persisted models and `go-playground/validator` for request validation once the app begins taking real inputs.
+- Prefer grouped controllers and domain services when a feature area has several related routes.
 - Do not start a later phase until the current phase has passing tests and updated docs where needed.
 
 ## Delivery Shape
@@ -76,10 +78,11 @@ Goal:
 Work:
 
 - wire router, middleware chain, handlers, services, and DAO interfaces,
+- define the controller/service shape for feature areas that will fan out into multiple routes,
 - define shared request context shape for authenticated tenant data,
 - add common response helpers for success and error JSON,
 - add structured logging and request tracing basics,
-- add validation helpers for headers, path params, query params, and JSON bodies.
+- add validation helpers for headers, path params, query params, and JSON bodies, with the expectation that route-level payloads will later use a standard validator.
 
 Outputs:
 
@@ -156,6 +159,7 @@ Goal:
 Work:
 
 - create migrations for tenants, flags, and flag-user override storage from the tech spec,
+- define GORM entities for the persisted models,
 - implement DAO interfaces for flags and per-user overrides,
 - decide repository method shapes before handlers are added widely,
 - add archive-aware read/write behavior in the DAO layer,
@@ -204,8 +208,8 @@ Why first:
 Work:
 
 - implement request validation,
-- implement create service logic,
-- implement create handler,
+- implement create service logic inside a grouped flag service,
+- implement create controller/handler methods for the flag create flow,
 - map duplicate key and validation failures to documented responses,
 - add one end-to-end API test path.
 

@@ -505,7 +505,7 @@ Planned request path:
 
 1. middleware (`authentication`, `monitoring`),
 2. validation layer,
-3. API handler,
+3. controller layer,
 4. service layer,
 5. DAO/repository layer,
 6. MySQL.
@@ -516,14 +516,19 @@ Guidelines:
 - dependency construction happens in main startup flow,
 - startup fails immediately if config, DB, repositories, or services cannot be created,
 - do not use `init()` functions for app wiring.
+- prefer GORM-backed entities for persisted models,
+- prefer a standard validator package for request DTO validation instead of ad hoc validation code,
+- group related flag and evaluation operations into reusable controllers and services instead of one-off endpoint structs when that improves scalability.
 
 ## Suggested Package Layout
 
 ```text
 feat-manager/cmd/api/
 feat-manager/internal/config/
+feat-manager/internal/entity/
 feat-manager/internal/domain/
 feat-manager/internal/http/middleware/
+feat-manager/internal/http/controller/
 feat-manager/internal/http/validation/
 feat-manager/internal/http/handlers/
 feat-manager/internal/service/
@@ -539,7 +544,7 @@ Test priorities:
 
 1. authentication middleware behavior,
 2. tenant isolation checks,
-3. flag service CRUD behavior,
+3. flag controller and service CRUD behavior,
 4. per-user override behavior,
 5. evaluation behavior,
 6. DAO integration against MySQL.

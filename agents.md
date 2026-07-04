@@ -30,6 +30,15 @@
 - No batch evaluation API is needed in v1.
 - APIs should document clear 4xx and 5xx responses with safe client-facing messages and without exposing internal system details.
 
+## Refactoring Direction
+
+- Prefer entity structs mapped with GORM for persisted models.
+- Prefer `go-playground/validator` for request validation instead of custom hand-written validation helpers where practical.
+- Group related business operations into domain services such as `FlagService` and `EvalService` instead of creating one service type per endpoint.
+- Use controller structs that can depend on multiple services and expose multiple handler methods, rather than creating a separate handler struct for every route action.
+- Use meaningful dependency field names during wiring so startup code stays easy to read and debug.
+- Keep the codebase simple, but allow slightly more structure when it reduces duplication or makes the API surface scale more cleanly.
+
 ## Coding Rules
 
 - Use TDD for backend work.
@@ -37,7 +46,7 @@
 - Keep changes small, focused, and feature-by-feature.
 - Treat tenant isolation as a hard requirement.
 - Never allow cross-tenant reads, writes, caching, or shared state.
-- Keep implementation simple and explicit unless a later decision requires more structure.
+- Keep implementation simple and explicit, but favor grouped controllers, services, and entities when they reduce duplication or endpoint-specific boilerplate.
 
 ## Workflow Rules
 

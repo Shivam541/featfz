@@ -340,3 +340,30 @@ The user asked to push the change and then move on to phase 4.
 Resulting direction:
 
 The phase 3 commit was pushed to `origin/main` as `1fef269`. Phase 4 is now implemented in `feat-manager` with authenticated `POST /v1/flags`, create-flag validation, duplicate-key handling, router/app wiring, and an integration test that creates a real flag record in MySQL. The backend suite still passes with `go test ./...`, and the backend README now documents the create-flag slice plus the DB-backed test setup.
+
+## Entry
+
+### 2026-07-04 23:48:02 IST
+
+Prompt summary:
+
+The user asked to reduce architectural drift and suggested a refactor toward GORM entities, validator-based request validation, grouped services such as `FlagService` and `EvalService`, controller-style handlers that can expose multiple methods, and clearer dependency names. The user also asked for the repo rules and related docs to be updated to reflect that direction.
+
+Decision points:
+
+- Whether to keep the existing one-handler-per-action structure or move the docs toward a more scalable controller/service model.
+- Whether request validation should stay custom or move to a standard validator package.
+- Whether the persisted model guidance should explicitly call for GORM-backed entities.
+- How to keep the repo guidance consistent with the new readability goals without overcomplicating the implementation notes.
+
+AI recommendation:
+
+The recommendation was to update the repo guidance so future implementation favors GORM entities for persisted models, a standard validator package for DTO checks, grouped domain services for feature areas like flags and evaluation, and controller structs that can own multiple related handler methods. The recommendation also kept the simplicity rule, but narrowed it to avoid one-off endpoint structs when a grouped controller would be clearer.
+
+User response:
+
+The user asked for the repo rules in `agents.md` and the related planning/spec documents to be updated, and asked for the write-up to capture the change.
+
+Resulting direction:
+
+`agents.md`, the development plan, and the tech spec now reflect the refactoring direction: GORM-backed entities, validator-based request checking, grouped services, controller-style request handling, and meaningful dependency names. The write-up now records this architecture adjustment so future work can follow the updated guidance instead of the earlier minimalist split-every-endpoint approach.
