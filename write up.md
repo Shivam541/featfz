@@ -656,6 +656,31 @@ Phase 8 now has migration workflow helpers in addition to the smoke target and p
 
 Prompt summary:
 
+The user asked to start phase 9.
+
+Decision points:
+
+- Whether phase 9 needed code changes or just a review artifact.
+- Whether the repo already matched the v1 checklist closely enough to declare the MVP ready.
+
+AI recommendation:
+
+The recommendation was to treat phase 9 as a pre-MVP review pass, confirm the implemented endpoints and tenant-safety behavior against the tech spec, and add a concise review note plus a test matrix in the README. I found no blocking behavior gaps in the implemented v1 surface, so this phase is primarily a review-and-documentation pass rather than a feature change.
+
+User response:
+
+The user asked to begin phase 9.
+
+Resulting direction:
+
+Phase 9 now has a documented review outcome and a clearer test matrix for the documented v1 workflow.
+
+## Entry
+
+### 2026-07-05
+
+Prompt summary:
+
 The user asked for fixture/seed tooling for manual testing and a logging review.
 
 Decision points:

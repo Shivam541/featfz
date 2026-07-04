@@ -299,3 +299,38 @@ SMOKE_FLAG_KEY=phase8_eval_smoke_custom make smoke-eval
 ```bash
 make test
 ```
+
+## Test Matrix
+
+- `make test`
+  - runs the Go test suite with the repo-local build cache.
+- `make smoke-eval`
+  - runs a live eval smoke flow against `http://127.0.0.1:8080`.
+- `make hooks-install`
+  - installs the local pre-push hook that blocks pushes on failing tests.
+- `make seed-phase8`
+  - loads repeatable manual testing data for both tenants.
+- `make migrate-status`
+  - checks whether the database is at the expected migration state.
+
+## Phase 9 Review
+
+Phase 9 is the pre-MVP review pass.
+
+- What was checked:
+  - all documented v1 endpoints exist in the router,
+  - tenant scope is enforced in middleware, services, and DAO queries,
+  - archive behavior is soft and excluded from active reads,
+  - evaluation falls back to the flag default when no override exists,
+  - error responses stay on generic client-safe envelopes,
+  - tests cover the main success and failure paths,
+  - docs reflect the commands and API behavior we actually use.
+- Review result:
+  - no blocking MVP gaps were found in the implemented v1 surface.
+- Deferred work:
+  - keep the `.github/workflows/go.yml` file review separate if it is meant to be adopted,
+  - revisit any post-v1 feature ideas only after the MVP is stable.
+
+MVP-ready note:
+
+The backend is ready for the documented v1 workflow: local boot, tenant-authenticated management APIs, user overrides, eval, and the supporting test and seed commands.
