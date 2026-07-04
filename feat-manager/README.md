@@ -10,8 +10,10 @@ Go backend for the feature flag monorepo.
 4. `make seed-phase2`
 5. `make test`
 6. `make run`
+7. `make smoke-eval`
 
 `make test`, `make run`, and `make build` use a repo-local Go build cache under `.cache/go-build`.
+`make smoke-eval` expects the API to be running locally on `127.0.0.1:8080`.
 
 ## Phase 2 auth slice
 
@@ -212,6 +214,52 @@ curl -X POST http://localhost:8080/v1/flags/new_dashboard/users/bulk-set \
       {"user_id": "user_123", "enabled": false}
     ]
   }'
+```
+
+## Phase 7 evaluation slice
+
+Phase 7 adds the runtime read path for a single flag and user.
+
+- Route:
+  - `GET /eval?flag=<flagKey>&user=<userID>`
+- Behavior:
+  - returns the flag override when one exists,
+  - otherwise falls back to the flag default,
+  - `flag` and `user` are required query parameters,
+  - the response is `{"success": true, "result": "on"|"off"}`.
+- Expected responses:
+  - `200 OK` when evaluation succeeds,
+  - `400 Bad Request` when the query is missing or malformed,
+  - `404 Not Found` when the tenant flag does not exist,
+  - `503 Service Unavailable` for unexpected dependency failures.
+
+Example curl:
+
+```bash
+curl "http://localhost:8080/eval?flag=new_dashboard&user=user_123" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-App-ID: $APP_ID"
+```
+
+## Phase 8 hardening slice
+
+Phase 8 starts with a local smoke workflow for the eval path.
+
+- Command:
+  - `make smoke-eval`
+- What it does:
+  - generates JWTs for `app-acme` and `app-globex`,
+  - creates the same smoke flag in both tenants,
+  - applies a user override in `acme`,
+  - prints the live eval results for both tenants.
+- Requirements:
+  - backend running on `127.0.0.1:8080`,
+  - MySQL running with the seeded tenants.
+
+You can also override the generated flag key:
+
+```bash
+SMOKE_FLAG_KEY=phase8_eval_smoke_custom make smoke-eval
 ```
 
 ## Test command

@@ -522,3 +522,28 @@ The user asked to begin phase 7 after reviewing the development plan and tech sp
 Resulting direction:
 
 Phase 7 is now implemented in `feat-manager` with the evaluation read path, documented error handling, and tenant-scoped integration coverage.
+
+## Entry
+
+### 2026-07-05
+
+Prompt summary:
+
+The user asked to push the phase 7 work and move to phase 8.
+
+Decision points:
+
+- Whether to keep phase 8 to docs only or add a small developer workflow improvement.
+- Whether the workflow should be a script, a Makefile target, or both.
+
+AI recommendation:
+
+The recommendation was to add a tiny phase 8 hardening slice: a `make smoke-eval` target backed by a shell script that generates tenant JWTs, creates a smoke flag in both tenants, applies an override in `acme`, and prints the live eval responses. I also documented the phase 7 API and the new smoke workflow in the backend README.
+
+User response:
+
+The user asked to push phase 7 and then move to phase 8.
+
+Resulting direction:
+
+Phase 7 has been committed and pushed, and phase 8 now begins with a repeatable local smoke flow for the eval endpoint.

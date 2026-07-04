@@ -1,7 +1,7 @@
 SHELL := /bin/sh
 GOCACHE ?= $(CURDIR)/.cache/go-build
 
-.PHONY: setup deps-up deps-down test run build migrate-up migrate-down fmt seed-phase2 cache-dir
+.PHONY: setup deps-up deps-down test run build migrate-up migrate-down fmt seed-phase2 smoke-eval cache-dir
 
 cache-dir:
 	mkdir -p "$(GOCACHE)"
@@ -37,3 +37,6 @@ fmt:
 
 seed-phase2:
 	docker compose exec -T mysql mysql -ufeat_manager -pfeat_manager feat_manager < db/seeds/phase2_tenants.sql
+
+smoke-eval:
+	bash ./scripts/smoke_eval.sh
