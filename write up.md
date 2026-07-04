@@ -135,3 +135,79 @@ The user asked for a development plan that breaks down the tech spec phase by ph
 Resulting direction:
 
 A separate phased development plan document was added under `docs/plans/`. It focuses on backend-first execution, phase gates, recommended commit slices, test coverage expectations, and MVP completion criteria, while using the tech spec as the source of truth for design details.
+
+## Entry
+
+### 2026-07-04 22:07:58 IST
+
+Prompt summary:
+
+The user asked to review the repo guidance documents again, start implementation from `docs/plans/development_plan.md`, and begin with phase 0.
+
+Decision points:
+
+- How much of phase 0 should be real implementation versus placeholder scaffolding.
+- What migration strategy to choose early so later schema work does not need another tool switch.
+- How strict config loading should be during the first bootstrapping slice.
+
+AI recommendation:
+
+The recommendation was to treat phase 0 as a real vertical slice rather than a paper setup step: add the Go module and backend folder skeleton, wire startup through explicit dependency construction, require the core database config fields up front, expose a small health endpoint for smoke tests, and choose a migration workflow immediately so schema work in phase 3 can land without setup churn. For migrations, the recommendation was SQL-file migrations stored in-repo and executed through the `migrate/migrate` container so local development stays consistent with the Docker-based MySQL dependency.
+
+User response:
+
+The user asked to proceed from the repo documents and explicitly start with phase 0.
+
+Resulting direction:
+
+Phase 0 implementation started with a runnable Go API skeleton, env-based config loading, fail-fast MySQL bootstrap, a `/healthz` endpoint, `docker compose` MySQL setup, `Makefile` commands for common development flows, and an initial no-op migration scaffold to lock in the migration path early.
+
+## Entry
+
+### 2026-07-04 22:07:58 IST
+
+Prompt summary:
+
+The user clarified the product naming they want across the repo components.
+
+Decision points:
+
+- What the Go backend should be called in docs and runtime-facing labels.
+- What names should be reserved for the UI and client showcase components before they are implemented.
+
+AI recommendation:
+
+The recommendation was to apply the naming immediately in the backend-facing docs and local runtime labels so future work does not mix placeholder repo naming with actual product naming.
+
+User response:
+
+The user asked to call the Go backend `feat-manager`, the UI `feat-ui`, and the client-side showcase `feat-client`.
+
+Resulting direction:
+
+The backend is now documented and labeled as `feat-manager`, while `feat-ui` and `feat-client` are reserved in the repo docs for the later UI and showcase work. Local MySQL defaults were also renamed to `feat_manager` for consistency with the backend component name.
+
+## Entry
+
+### 2026-07-04 22:07:58 IST
+
+Prompt summary:
+
+The user clarified that this repository should be a monorepo and asked not to keep the backend implementation in the repo root.
+
+Decision points:
+
+- Whether to leave phase 0 backend files in the root temporarily or move them immediately into an app directory.
+- How to make room now for the future UI and client showcase apps without redoing the repo layout later.
+
+AI recommendation:
+
+The recommendation was to adopt the monorepo layout immediately by moving the backend bootstrap under `feat-manager/`, leaving the root for shared docs and app-level directories. This avoids another repo-wide move once `feat-ui` and `feat-client` are added.
+
+User response:
+
+The user said this will be a monorepo and asked not to put the whole backend code in the repo root.
+
+Resulting direction:
+
+The backend bootstrap now lives under `feat-manager/`, and the root repo layout is being treated as the shared monorepo home for `feat-manager`, `feat-ui`, and `feat-client`.

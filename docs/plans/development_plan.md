@@ -34,11 +34,11 @@ Goal:
 
 Work:
 
-- initialize the Go module and backend folder structure,
+- initialize the Go module and backend folder structure under `feat-manager/`,
 - add `Makefile` targets for setup, run, test, and dependency helpers,
 - add `docker compose` for MySQL,
 - add config loading for local development,
-- add a small `cmd/api` startup flow with dependency wiring,
+- add a small `feat-manager/cmd/api` startup flow with dependency wiring,
 - add a simple health endpoint for smoke testing,
 - add a migration strategy choice and first migration scaffolding.
 

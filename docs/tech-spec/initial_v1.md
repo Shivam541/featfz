@@ -520,15 +520,15 @@ Guidelines:
 ## Suggested Package Layout
 
 ```text
-cmd/api/
-internal/config/
-internal/domain/
-internal/http/middleware/
-internal/http/validation/
-internal/http/handlers/
-internal/service/
-internal/dao/
-internal/mysql/
+feat-manager/cmd/api/
+feat-manager/internal/config/
+feat-manager/internal/domain/
+feat-manager/internal/http/middleware/
+feat-manager/internal/http/validation/
+feat-manager/internal/http/handlers/
+feat-manager/internal/service/
+feat-manager/internal/dao/
+feat-manager/internal/mysql/
 ```
 
 ## Testing Direction

@@ -3,6 +3,12 @@
 ## Repo Context
 
 - Build a feature flag service in Go.
+- This repo is a monorepo.
+- Component names:
+  - `feat-manager` for the Go backend,
+  - `feat-ui` for the UI,
+  - `feat-client` for the client-side showcase.
+- Backend implementation files should live under `feat-manager/`, not in the repo root.
 - A lightweight React/Next.js client will be used to call the backend APIs.
 - MySQL is the initial database, managed through `docker compose`.
 - The backend is the main component for this phase.
