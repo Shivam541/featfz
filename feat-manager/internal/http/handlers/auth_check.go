@@ -16,7 +16,7 @@ func NewAuthCheck() http.Handler {
 func (AuthCheckHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	tenant, ok := requestctx.TenantFrom(r.Context())
 	if !ok {
-		response.WriteError(w, http.StatusInternalServerError, "tenant_context_missing", "internal server error", nil)
+		response.WriteError(w, http.StatusInternalServerError, "tenant_context_missing", "Something went wrong.", nil)
 		return
 	}
 

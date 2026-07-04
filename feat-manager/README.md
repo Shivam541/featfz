@@ -14,12 +14,14 @@ Go backend for the feature flag monorepo.
 8. `make hooks-install`
 9. `make migrate-status`
 10. `make migrate-create NAME=<name>`
+11. `make seed-phase8`
 
 `make test`, `make run`, and `make build` use a repo-local Go build cache under `.cache/go-build`.
 `make smoke-eval` expects the API to be running locally on `127.0.0.1:8080`.
 `make hooks-install` sets `core.hooksPath` to `.githooks` so the local pre-push hook blocks pushes when tests fail.
 `make migrate-status` checks the current migration state.
 `make migrate-create NAME=<name>` scaffolds a new SQL migration under `db/migrations`.
+`make seed-phase8` loads repeatable manual-testing flags and overrides for both tenants.
 
 ## Phase 2 auth slice
 
@@ -258,6 +260,8 @@ Phase 8 starts with a local smoke workflow for the eval path.
 - Migration helpers:
   - `make migrate-status`
   - `make migrate-create NAME=<name>`
+- Manual seed:
+  - `make seed-phase8`
 - What it does:
   - generates JWTs for `app-acme` and `app-globex`,
   - creates the same smoke flag in both tenants,
@@ -270,9 +274,19 @@ Phase 8 starts with a local smoke workflow for the eval path.
 - What the migration helpers do:
   - `make migrate-status` prints whether the local database is up to date,
   - `make migrate-create NAME=<name>` creates a new SQL migration file pair.
+- What the manual seed does:
+  - loads `phase8_manual_default_off` and `phase8_manual_default_on` for both tenants,
+  - adds an `acme` override for `user_123` on the default-off flag,
+  - gives you a repeatable DB state for manual eval testing.
 - Requirements:
   - backend running on `127.0.0.1:8080`,
   - MySQL running with the seeded tenants.
+
+To seed the manual fixtures after migrations:
+
+```bash
+make seed-phase8
+```
 
 You can also override the generated flag key:
 

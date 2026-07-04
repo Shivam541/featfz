@@ -55,5 +55,22 @@ func TestAuthCheck(t *testing.T) {
 		if rec.Code != http.StatusInternalServerError {
 			t.Fatalf("expected 500, got %d", rec.Code)
 		}
+
+		var body struct {
+			Success bool `json:"success"`
+			Error   struct {
+				Code    string `json:"code"`
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("expected valid json body, got %v", err)
+		}
+		if body.Error.Code != "tenant_context_missing" {
+			t.Fatalf("expected tenant_context_missing, got %q", body.Error.Code)
+		}
+		if body.Error.Message != "Something went wrong." {
+			t.Fatalf("expected generic error message, got %q", body.Error.Message)
+		}
 	})
 }

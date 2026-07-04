@@ -139,7 +139,8 @@ func TestEvaluateFlagMapsErrors(t *testing.T) {
 			var body struct {
 				Success bool `json:"success"`
 				Error   struct {
-					Code string `json:"code"`
+					Code    string `json:"code"`
+					Message string `json:"message"`
 				} `json:"error"`
 			}
 			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
@@ -150,6 +151,9 @@ func TestEvaluateFlagMapsErrors(t *testing.T) {
 			}
 			if body.Error.Code != tt.wantCode {
 				t.Fatalf("expected error code %q, got %q", tt.wantCode, body.Error.Code)
+			}
+			if tt.name == "dependency failure" && body.Error.Message != "The service is temporarily unavailable." {
+				t.Fatalf("expected generic dependency error message, got %q", body.Error.Message)
 			}
 		})
 	}
