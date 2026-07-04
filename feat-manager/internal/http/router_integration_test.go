@@ -293,6 +293,143 @@ func TestBulkSetOverridesRouteIntegration(t *testing.T) {
 	}
 }
 
+func TestEvalRouteIntegration(t *testing.T) {
+	db := openRouterIntegrationDB(t)
+	resetRouterIntegrationTables(t, db)
+
+	tenantOneID := insertRouterIntegrationTenant(t, db, "acme", "app-acme", "acme-secret")
+	tenantTwoID := insertRouterIntegrationTenant(t, db, "globex", "app-globex", "globex-secret")
+	now := time.Unix(1_720_000_000, 0).UTC()
+
+	router := NewRouter(RouterDependencies{
+		HealthChecker: service.StaticHealthChecker{},
+		Authenticator: service.AuthenticationService{
+			TenantApps:    dao.NewTenantAppRepository(db),
+			TokenVerifier: service.HS256JWTVerifier{},
+			Now:           func() time.Time { return now },
+		},
+		FlagController: controller.NewFlagController(service.NewFlagService(dao.NewFlagRepository(db), dao.NewFlagOverrideRepository(db)), validation.NewValidator()),
+		EvalController: controller.NewEvalController(service.NewEvalService(dao.NewFlagRepository(db), dao.NewFlagOverrideRepository(db))),
+	})
+
+	createTenantOneReq := httptest.NewRequest(http.MethodPost, "/v1/flags", strings.NewReader(`{
+		"key": "new_dashboard",
+		"description": "Tenant one dashboard",
+		"default_enabled": false
+	}`))
+	createTenantOneReq.Header.Set("Content-Type", "application/json")
+	createTenantOneReq.Header.Set("X-App-ID", "app-acme")
+	createTenantOneReq.Header.Set("Authorization", "Bearer "+testRouterJWT(t, "acme-secret", map[string]any{
+		"app_id": "app-acme",
+		"sub":    "user-123",
+		"exp":    now.Add(time.Hour).Unix(),
+	}))
+	createTenantOneRec := httptest.NewRecorder()
+	router.ServeHTTP(createTenantOneRec, createTenantOneReq)
+	if createTenantOneRec.Code != http.StatusCreated {
+		t.Fatalf("expected tenant one flag create 201, got %d: %s", createTenantOneRec.Code, createTenantOneRec.Body.String())
+	}
+
+	createTenantTwoReq := httptest.NewRequest(http.MethodPost, "/v1/flags", strings.NewReader(`{
+		"key": "new_dashboard",
+		"description": "Tenant two dashboard",
+		"default_enabled": false
+	}`))
+	createTenantTwoReq.Header.Set("Content-Type", "application/json")
+	createTenantTwoReq.Header.Set("X-App-ID", "app-globex")
+	createTenantTwoReq.Header.Set("Authorization", "Bearer "+testRouterJWT(t, "globex-secret", map[string]any{
+		"app_id": "app-globex",
+		"sub":    "user-123",
+		"exp":    now.Add(time.Hour).Unix(),
+	}))
+	createTenantTwoRec := httptest.NewRecorder()
+	router.ServeHTTP(createTenantTwoRec, createTenantTwoReq)
+	if createTenantTwoRec.Code != http.StatusCreated {
+		t.Fatalf("expected tenant two flag create 201, got %d: %s", createTenantTwoRec.Code, createTenantTwoRec.Body.String())
+	}
+
+	bulkReq := httptest.NewRequest(http.MethodPost, "/v1/flags/new_dashboard/users/bulk-set", strings.NewReader(`{
+		"overrides": [
+			{"user_id":"user_123","enabled":true}
+		]
+	}`))
+	bulkReq.Header.Set("Content-Type", "application/json")
+	bulkReq.SetPathValue("flagKey", "new_dashboard")
+	bulkReq.Header.Set("X-App-ID", "app-acme")
+	bulkReq.Header.Set("Authorization", "Bearer "+testRouterJWT(t, "acme-secret", map[string]any{
+		"app_id": "app-acme",
+		"sub":    "user-123",
+		"exp":    now.Add(time.Hour).Unix(),
+	}))
+	bulkRec := httptest.NewRecorder()
+	router.ServeHTTP(bulkRec, bulkReq)
+	if bulkRec.Code != http.StatusOK {
+		t.Fatalf("expected tenant one bulk set 200, got %d: %s", bulkRec.Code, bulkRec.Body.String())
+	}
+
+	evalTenantOneReq := httptest.NewRequest(http.MethodGet, "/eval?flag=new_dashboard&user=user_123", nil)
+	evalTenantOneReq.Header.Set("X-App-ID", "app-acme")
+	evalTenantOneReq.Header.Set("Authorization", "Bearer "+testRouterJWT(t, "acme-secret", map[string]any{
+		"app_id": "app-acme",
+		"sub":    "user-123",
+		"exp":    now.Add(time.Hour).Unix(),
+	}))
+	evalTenantOneRec := httptest.NewRecorder()
+	router.ServeHTTP(evalTenantOneRec, evalTenantOneReq)
+	if evalTenantOneRec.Code != http.StatusOK {
+		t.Fatalf("expected tenant one eval 200, got %d: %s", evalTenantOneRec.Code, evalTenantOneRec.Body.String())
+	}
+
+	var tenantOneBody struct {
+		Success bool   `json:"success"`
+		Result  string `json:"result"`
+	}
+	if err := json.Unmarshal(evalTenantOneRec.Body.Bytes(), &tenantOneBody); err != nil {
+		t.Fatalf("expected valid tenant one eval body, got %v", err)
+	}
+	if !tenantOneBody.Success || tenantOneBody.Result != "on" {
+		t.Fatalf("unexpected tenant one eval response: %+v", tenantOneBody)
+	}
+
+	evalTenantTwoReq := httptest.NewRequest(http.MethodGet, "/eval?flag=new_dashboard&user=user_123", nil)
+	evalTenantTwoReq.Header.Set("X-App-ID", "app-globex")
+	evalTenantTwoReq.Header.Set("Authorization", "Bearer "+testRouterJWT(t, "globex-secret", map[string]any{
+		"app_id": "app-globex",
+		"sub":    "user-123",
+		"exp":    now.Add(time.Hour).Unix(),
+	}))
+	evalTenantTwoRec := httptest.NewRecorder()
+	router.ServeHTTP(evalTenantTwoRec, evalTenantTwoReq)
+	if evalTenantTwoRec.Code != http.StatusOK {
+		t.Fatalf("expected tenant two eval 200, got %d: %s", evalTenantTwoRec.Code, evalTenantTwoRec.Body.String())
+	}
+
+	var tenantTwoBody struct {
+		Success bool   `json:"success"`
+		Result  string `json:"result"`
+	}
+	if err := json.Unmarshal(evalTenantTwoRec.Body.Bytes(), &tenantTwoBody); err != nil {
+		t.Fatalf("expected valid tenant two eval body, got %v", err)
+	}
+	if !tenantTwoBody.Success || tenantTwoBody.Result != "off" {
+		t.Fatalf("unexpected tenant two eval response: %+v", tenantTwoBody)
+	}
+
+	var count int
+	if err := db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM flag_user_overrides WHERE tenant_id = ?`, tenantOneID).Scan(&count); err != nil {
+		t.Fatalf("count tenant one overrides: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected 1 tenant one override row, got %d", count)
+	}
+	if err := db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM flags WHERE tenant_id = ?`, tenantTwoID).Scan(&count); err != nil {
+		t.Fatalf("count tenant two flags: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected 1 tenant two flag row, got %d", count)
+	}
+}
+
 func openRouterIntegrationDB(t *testing.T) *sql.DB {
 	t.Helper()
 

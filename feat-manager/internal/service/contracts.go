@@ -74,3 +74,11 @@ type FlagUserOverrideInput struct {
 	UserID  string
 	Enabled bool
 }
+
+type EvalResult struct {
+	Enabled bool
+}
+
+type Evaluator interface {
+	Evaluate(context.Context, int64, string, string) (EvalResult, error)
+}

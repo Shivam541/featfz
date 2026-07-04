@@ -27,6 +27,8 @@ type Dependencies struct {
 	NewAuthenticator          func(service.TenantAppRepository) service.Authenticator
 	NewFlagService            func(service.FlagRepository, service.FlagOverrideRepository) service.FlagManager
 	NewFlagController         func(service.FlagManager) *controller.FlagController
+	NewEvalService            func(service.FlagRepository, service.FlagOverrideRepository) service.Evaluator
+	NewEvalController         func(service.Evaluator) *controller.EvalController
 }
 
 type Runtime struct {
@@ -93,6 +95,20 @@ func New(ctx context.Context, cfg config.Config, dependencies Dependencies) (*Ru
 		}
 	}
 
+	newEvalService := dependencies.NewEvalService
+	if newEvalService == nil {
+		newEvalService = func(repo service.FlagRepository, overrideRepo service.FlagOverrideRepository) service.Evaluator {
+			return service.NewEvalService(repo, overrideRepo)
+		}
+	}
+
+	newEvalController := dependencies.NewEvalController
+	if newEvalController == nil {
+		newEvalController = func(evalService service.Evaluator) *controller.EvalController {
+			return controller.NewEvalController(evalService)
+		}
+	}
+
 	db, err := openDB(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
@@ -104,6 +120,8 @@ func New(ctx context.Context, cfg config.Config, dependencies Dependencies) (*Ru
 	authenticator := newAuthenticator(tenantAppRepository)
 	flagService := newFlagService(flagRepository, flagOverrideRepository)
 	flagController := newFlagController(flagService)
+	evalService := newEvalService(flagRepository, flagOverrideRepository)
+	evalController := newEvalController(evalService)
 
 	return &Runtime{
 		DB: db,
@@ -112,6 +130,7 @@ func New(ctx context.Context, cfg config.Config, dependencies Dependencies) (*Ru
 			HealthChecker:  healthChecker,
 			Authenticator:  authenticator,
 			FlagController: flagController,
+			EvalController: evalController,
 		}),
 	}, nil
 }

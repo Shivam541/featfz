@@ -177,6 +177,52 @@ func TestNewRouterBulkSetOverridesRoute(t *testing.T) {
 	}
 }
 
+func TestNewRouterEvalRoute(t *testing.T) {
+	now := time.Unix(1_720_000_000, 0).UTC()
+	router := NewRouter(RouterDependencies{
+		Logger:        slog.New(slog.NewTextHandler(io.Discard, nil)),
+		HealthChecker: stubHealthChecker{status: "ok"},
+		Authenticator: service.AuthenticationService{
+			TenantApps: routerTenantApps{
+				records: map[string]domain.TenantApp{
+					"app-acme": {
+						TenantID:  21,
+						AppID:     "app-acme",
+						JWTSecret: "phase2-secret",
+					},
+				},
+			},
+			TokenVerifier: service.HS256JWTVerifier{},
+			Now:           func() time.Time { return now },
+		},
+		EvalController: controller.NewEvalController(&routerEvalService{result: service.EvalResult{Enabled: true}}),
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/eval?flag=new_dashboard&user=user_123", nil)
+	req.Header.Set("X-App-ID", "app-acme")
+	req.Header.Set("Authorization", "Bearer "+routerJWT(t, "phase2-secret", map[string]any{
+		"app_id": "app-acme",
+		"sub":    "user-123",
+		"exp":    now.Add(time.Hour).Unix(),
+	}))
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+type routerEvalService struct {
+	result service.EvalResult
+	err    error
+}
+
+func (s *routerEvalService) Evaluate(context.Context, int64, string, string) (service.EvalResult, error) {
+	return s.result, s.err
+}
+
 type routerTenantApps struct {
 	records map[string]domain.TenantApp
 }

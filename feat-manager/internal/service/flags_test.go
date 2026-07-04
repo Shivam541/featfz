@@ -19,6 +19,7 @@ type stubFlagRepository struct {
 
 type stubFlagOverrideRepository struct {
 	bulkUpsertFn func(context.Context, int64, int64, []domain.FlagUserOverride) error
+	findFn       func(context.Context, int64, int64, string) (domain.FlagUserOverride, error)
 }
 
 func (s stubFlagRepository) Create(ctx context.Context, flag domain.Flag) (domain.Flag, error) {
@@ -63,7 +64,10 @@ func (s stubFlagOverrideRepository) BulkUpsert(ctx context.Context, tenantID int
 	return nil
 }
 
-func (s stubFlagOverrideRepository) FindByUser(context.Context, int64, int64, string) (domain.FlagUserOverride, error) {
+func (s stubFlagOverrideRepository) FindByUser(ctx context.Context, tenantID int64, flagID int64, userID string) (domain.FlagUserOverride, error) {
+	if s.findFn != nil {
+		return s.findFn(ctx, tenantID, flagID, userID)
+	}
 	return domain.FlagUserOverride{}, ErrFlagOverrideNotFound
 }
 

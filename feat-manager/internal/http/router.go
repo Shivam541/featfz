@@ -16,6 +16,7 @@ type RouterDependencies struct {
 	HealthChecker  service.HealthChecker
 	Authenticator  service.Authenticator
 	FlagController *controller.FlagController
+	EvalController *controller.EvalController
 }
 
 func NewRouter(dependencies RouterDependencies) http.Handler {
@@ -32,6 +33,9 @@ func NewRouter(dependencies RouterDependencies) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /healthz", handlers.NewHealth(healthChecker))
 	mux.Handle("GET /v1/auth/check", middleware.RequireAuth(dependencies.Authenticator)(handlers.NewAuthCheck()))
+	if dependencies.EvalController != nil {
+		mux.Handle("GET /eval", middleware.RequireAuth(dependencies.Authenticator)(http.HandlerFunc(dependencies.EvalController.EvaluateFlag)))
+	}
 	if dependencies.FlagController != nil {
 		mux.Handle("POST /v1/flags", middleware.RequireAuth(dependencies.Authenticator)(http.HandlerFunc(dependencies.FlagController.CreateFlag)))
 		mux.Handle("GET /v1/flags", middleware.RequireAuth(dependencies.Authenticator)(http.HandlerFunc(dependencies.FlagController.ListFlags)))

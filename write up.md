@@ -496,3 +496,29 @@ The user asked to make the route more conventional REST-like.
 Resulting direction:
 
 The bulk override route now uses `/v1/flags/{flagKey}/users/bulk-set` everywhere, and the docs reflect that shape instead of the earlier `users:bulk-set` form.
+
+## Entry
+
+### 2026-07-05
+
+Prompt summary:
+
+The user asked to continue from the plan, check the repo documents, and start phase 7.
+
+Decision points:
+
+- Whether the evaluation slice should reuse the existing grouped flag service or introduce a dedicated read-path service.
+- How to map evaluation failures so missing flags stay `404`, query problems stay `400`, and dependency issues stay safe for clients.
+- How to verify tenant isolation through the real router path rather than only service-level tests.
+
+AI recommendation:
+
+The recommendation was to add a dedicated `EvalService` plus `EvalController`, wire `GET /eval` through the authenticated router, and keep the response contract aligned with the tech spec by returning `{"success": true, "result": "on"|"off"}`. I also added service, controller, router, and integration tests for default-on, default-off, override precedence, bad query params, missing flags, dependency failures, and cross-tenant isolation.
+
+User response:
+
+The user asked to begin phase 7 after reviewing the development plan and tech spec.
+
+Resulting direction:
+
+Phase 7 is now implemented in `feat-manager` with the evaluation read path, documented error handling, and tenant-scoped integration coverage.
