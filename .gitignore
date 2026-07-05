@@ -31,6 +31,10 @@ go.work.sum
 bin/
 .cache/
 
+# Next.js client outputs
+feat-client/.next/
+feat-client/node_modules/
+
 # Editor/IDE
 # .idea/
 # .vscode/

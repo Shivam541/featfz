@@ -1,53 +1,104 @@
 # featfz
 
-Monorepo for the feature flag platform.
+Monorepo for a multi-tenant feature flag service.
 
-Apps in this repo:
+## Prerequisites
 
-- `feat-manager/` for the Go backend
-- `feat-ui/` for the UI
-- `feat-client/` for the client-side showcase
+- Go 1.22+
+- Node.js 20+
+- Docker Desktop or Docker Engine with Compose
 
-## Phase 0 status
+## Install
 
-The repo now includes the `feat-manager/` bootstrap needed to start local development:
+1. Install Go dependencies and backend tooling:
+   ```bash
+   cd feat-manager
+   make setup
+   ```
+2. Install frontend dependencies:
+   ```bash
+   cd ../feat-ui && npm install
+   cd ../feat-client && npm install
+   ```
 
-- Go API entrypoint in `feat-manager/cmd/api`
-- config loading from env
-- MySQL connection bootstrap with fail-fast startup
-- `GET /healthz` smoke-test endpoint
-- Docker Compose for MySQL
-- migration scaffold under `feat-manager/db/migrations`
-- Make targets for setup, run, test, build, and migrations inside `feat-manager/`
-- placeholder folders for `feat-ui` and `feat-client`
+## Run
 
-## Quick start
+1. Start the database:
+   ```bash
+   cd feat-manager
+   make deps-up
+   ```
+2. Run backend migrations and seed data:
+   ```bash
+   make migrate-up
+   make seed-phase2
+   ```
+3. Start the backend API:
+   ```bash
+   make run
+   ```
+4. Start the admin UI on port `3003`:
+   ```bash
+   cd ../feat-ui
+   npm run dev
+   ```
+5. Start the client showcase on port `3001`:
+   ```bash
+   cd ../feat-client
+   npm run dev
+   ```
 
-1. `cd feat-manager`
-2. `make setup`
-3. `make deps-up`
-4. `make test`
-5. `make run`
+## Test
 
-The API listens on `HTTP_ADDR`, which defaults to `:8080`.
-
-## Health check
+Run backend tests:
 
 ```bash
-curl http://localhost:8080/healthz
+cd feat-manager
+make test
 ```
 
-Expected response:
+Run frontend checks:
 
-```json
-{"success":true,"status":"ok"}
+```bash
+cd feat-ui && npm run lint && npm run build
+cd ../feat-client && npm run lint && npm run build
 ```
 
-## Migration strategy
+## Apps
 
-Phase 0 chooses SQL-file migrations stored in `feat-manager/db/migrations/` and executed through the `migrate/migrate` container:
+- `feat-manager/` - Go backend API and MySQL persistence
+- `feat-ui/` - admin UI for browsing, viewing, evaluating, and managing flags
+- `feat-client/` - client-side showcase and API playground
 
-- `make migrate-up`
-- `make migrate-down`
+## Current UI layout
 
-The first migration is intentionally a no-op scaffold so the migration workflow is ready before the flag schema lands in phase 3.
+- `feat-ui` home page is a launcher
+- `feat-ui/flags` keeps list, view, and evaluate together
+- `feat-ui/manage` keeps create, update, and archive together
+- app credentials stay hidden inside an expandable `App details` disclosure
+
+## Local ports
+
+- Backend API: `http://127.0.0.1:8080`
+- `feat-ui`: `http://127.0.0.1:3003`
+- `feat-client`: `http://127.0.0.1:3001`
+
+## Backend docs
+
+- [feat-manager/README.md](feat-manager/README.md)
+- [docs/tech-spec/initial_v1.md](docs/tech-spec/initial_v1.md)
+- [docs/plans/development_plan.md](docs/plans/development_plan.md)
+
+## Frontend entrypoints
+
+- [feat-ui/src/app/page.tsx](feat-ui/src/app/page.tsx)
+- [feat-ui/src/app/flags/page.tsx](feat-ui/src/app/flags/page.tsx)
+- [feat-ui/src/app/manage/page.tsx](feat-ui/src/app/manage/page.tsx)
+- [feat-client/src/app/page.tsx](feat-client/src/app/page.tsx)
+
+## Notes
+
+- Tenant context is header-based in v1.
+- Requests should send `Authorization: Bearer <jwt>` and `X-App-ID: <app-id>`.
+- JWTs include `app_id` and should include `iat` and `exp`.
+- `user_id` is tenant-scoped and treated as an opaque string.

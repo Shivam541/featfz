@@ -59,9 +59,9 @@
 
 ## Documentation Rules
 
-- The root `write up.md` file is append-only.
-- Never rewrite or delete earlier entries in `write up.md`.
-- Use `write up.md` to record:
+- The root `ai chat history.md` file is append-only.
+- Never rewrite or delete earlier entries in `ai chat history.md`.
+- Use `ai chat history.md` to record:
   - User prompts and refinements.
   - Major decisions and tradeoffs.
   - When two paths were considered and how one was chosen.
